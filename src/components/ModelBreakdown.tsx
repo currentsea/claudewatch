@@ -5,7 +5,6 @@ import {
   Cell,
   Tooltip,
   ResponsiveContainer,
-  Legend,
 } from 'recharts';
 import { ComputedCosts } from '../types';
 import { formatCost, formatTokens } from '../utils/pricing';

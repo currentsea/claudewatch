@@ -396,8 +396,19 @@ app.get('/api/usage', (_req, res) => {
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 const PORT = process.env.SERVER_PORT || 3001;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🔥 BurnItDown API server → http://localhost:${PORT}`);
   console.log(`📁 Claude data path      → ${CLAUDE_DATA_PATH}`);
   console.log(`📅 Billing day of month  → ${BILLING_DAY}`);
+});
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`\n❌  Port ${PORT} is already in use.`);
+    console.error(`   Run: lsof -ti:${PORT} | xargs kill -9`);
+    console.error(`   Then restart with: npm start\n`);
+  } else {
+    console.error('Server error:', err);
+  }
+  process.exit(1);
 });

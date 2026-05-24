@@ -6,6 +6,7 @@ import {
   DollarSign,
   BarChart2,
   TrendingUp,
+  TrendingDown,
   Activity,
   Clock,
   MessageSquare,
@@ -20,6 +21,7 @@ import {
   formatCost,
   formatTokens,
   savings,
+  anthropicPnL,
   SUBSCRIPTION_TIERS,
 } from './utils/pricing';
 
@@ -31,6 +33,7 @@ import { BurnMeter } from './components/BurnMeter';
 import { TokenBreakdown } from './components/TokenBreakdown';
 import { SessionsTable } from './components/SessionsTable';
 import { SubscriptionSelector } from './components/SubscriptionSelector';
+import { AnthropicPnL } from './components/AnthropicPnL';
 
 // ── Loader ────────────────────────────────────────────────────────────────────
 function Loader() {
@@ -89,7 +92,8 @@ export default function App() {
   const totalMessages = data?.totalStats.totalMessages ?? 0;
   const totalSessions = data?.totalStats.totalSessions ?? 0;
   const monthSaved = savings(subscriptionCost, currentPeriodCost);
-  const allTimeSaved = savings(subscriptionCost, totalApiCost);
+  const firstSessionDate = data?.totalStats.firstSessionDate ?? null;
+  const pnl = anthropicPnL(subscriptionCost, totalApiCost, firstSessionDate);
 
   // First use date
   const firstDate = data?.totalStats.firstSessionDate
@@ -229,7 +233,7 @@ export default function App() {
             </div>
 
             {/* ── Stat cards ────────────────────────────────────────────── */}
-            <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-5">
               <StatCard
                 title="All-Time Tokens"
                 value={formatTokens(grandTotal)}
@@ -296,6 +300,24 @@ export default function App() {
                       }
                 }
               />
+              <StatCard
+                title="Anthropic's All-Time Net"
+                value={
+                  pnl.profit >= 0
+                    ? `+${formatCost(pnl.profit)}`
+                    : `−${formatCost(Math.abs(pnl.profit))}`
+                }
+                subtitle={`Over ${pnl.months} month${pnl.months !== 1 ? 's' : ''} · ${formatCost(pnl.revenue)} revenue`}
+                icon={pnl.profit >= 0 ? TrendingUp : TrendingDown}
+                iconColor={pnl.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}
+                valueColor={pnl.profit >= 0 ? 'text-emerald-300' : 'text-red-300'}
+                badge={{
+                  label: pnl.profit >= 0 ? '📈 Anthropic profits' : '📉 Anthropic loses',
+                  color: pnl.profit >= 0
+                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                    : 'bg-red-500/10 text-red-400 border border-red-500/20',
+                }}
+              />
             </div>
 
             {/* ── Usage chart + Model breakdown ─────────────────────────── */}
@@ -315,7 +337,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* ── Burn meter + Cost comparison ──────────────────────────── */}
+            {/* ── Cost Analysis + Anthropic P&L ─────────────────────────── */}
             <div className="mb-4 flex items-center gap-2">
               <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
                 Cost Analysis
@@ -323,7 +345,7 @@ export default function App() {
               <div className="flex-1 border-t border-slate-700/60" />
             </div>
 
-            <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
               <BurnMeter
                 currentPeriodCost={currentPeriodCost}
                 billingPeriodStart={data.billingPeriodStart}
@@ -332,6 +354,13 @@ export default function App() {
               <CostComparison
                 monthlyRollup={data.monthlyRollup}
                 subscriptionCost={subscriptionCost}
+              />
+              <AnthropicPnL
+                subscriptionCost={subscriptionCost}
+                totalApiCost={totalApiCost}
+                currentPeriodCost={currentPeriodCost}
+                firstSessionDate={firstSessionDate}
+                monthlyRollup={data.monthlyRollup}
               />
             </div>
 
