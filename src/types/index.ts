@@ -1,6 +1,28 @@
 // ── Domain types for BurnItDown dashboard ─────────────────────────────────────
 
-export type SubscriptionTier = 20 | 100 | 200;
+export type SubscriptionTier = number;
+
+// ── Custom pricing / settings ─────────────────────────────────────────────────
+
+export interface ModelPricingValues {
+  input: number;
+  output: number;
+  cacheCreation: number;
+  cacheRead: number;
+}
+
+export interface PricingSettings {
+  modelPricing: {
+    opus: ModelPricingValues;
+    sonnet: ModelPricingValues;
+    haiku: ModelPricingValues;
+  };
+  subscriptionTiers: {
+    pro: number;
+    max5x: number;
+    max20x: number;
+  };
+}
 
 export interface TokenCounts {
   inputTokens: number;
@@ -84,4 +106,18 @@ export interface ModelPricing {
   output: number;
   cacheCreation: number;
   cacheRead: number;
+}
+
+/**
+ * A "tick" entry — one entry per refresh-interval poll where new tokens were
+ * consumed since the previous tick.
+ */
+export interface TickEntry {
+  id: string;
+  timestamp: string;
+  deltaCost: number;          // incremental API cost since previous tick
+  deltaTokens: number;        // incremental grand-total tokens since previous tick
+  totalApiCost: number;       // running all-time API-equivalent cost
+  currentPeriodCost: number;  // running cost for the current billing period
+  intervalMs: number;         // how long the tick interval was at the time
 }

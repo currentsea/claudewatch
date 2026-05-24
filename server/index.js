@@ -55,9 +55,22 @@ function getModelTier(modelId) {
   return 'sonnet';
 }
 
-function computeTokenCost(tokens, modelId) {
+/**
+ * Merge client-supplied pricing overrides with server defaults.
+ * Accepts either a full {opus,sonnet,haiku} object or null/undefined.
+ */
+function resolveEffectivePricing(overrides) {
+  if (!overrides) return MODEL_PRICING;
+  const result = {};
+  for (const tier of ['opus', 'sonnet', 'haiku']) {
+    result[tier] = { ...MODEL_PRICING[tier], ...(overrides[tier] || {}) };
+  }
+  return result;
+}
+
+function computeTokenCost(tokens, modelId, pricing) {
   const tier = getModelTier(modelId);
-  const p = MODEL_PRICING[tier];
+  const p = (pricing || MODEL_PRICING)[tier];
   const M = 1_000_000;
   return (
     ((tokens.inputTokens || 0) / M) * p.input +
@@ -204,8 +217,19 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.get('/api/usage', (_req, res) => {
+app.get('/api/usage', (req, res) => {
   try {
+    // ── Pricing overrides ─────────────────────────────────────────────────────
+    let effectivePricing = MODEL_PRICING;
+    if (req.query.pricing) {
+      try {
+        const overrides = JSON.parse(req.query.pricing);
+        effectivePricing = resolveEffectivePricing(overrides);
+      } catch {
+        // malformed JSON — fall back to defaults
+      }
+    }
+
     const statsCache = readStatsCache();
     const billingPeriodStart = getBillingPeriodStart();
 
@@ -222,6 +246,14 @@ app.get('/api/usage', (_req, res) => {
           new Date(a.lastActivity || 0).getTime()
       );
 
+    // Re-compute session costs using the effective (possibly custom) pricing
+    for (const session of allSessions) {
+      session.estimatedCost = 0;
+      for (const [model, tokens] of Object.entries(session.models)) {
+        session.estimatedCost += computeTokenCost(tokens, model, effectivePricing);
+      }
+    }
+
     // ── All-time costs from stats-cache (most accurate) ───────────────────────
     const costByModel = {};
     let totalApiCost = 0;
@@ -234,14 +266,14 @@ app.get('/api/usage', (_req, res) => {
           cacheCreationInputTokens: usage.cacheCreationInputTokens || 0,
           cacheReadInputTokens: usage.cacheReadInputTokens || 0,
         };
-        const cost = computeTokenCost(tokens, model);
+        const cost = computeTokenCost(tokens, model, effectivePricing);
         const tier = getModelTier(model);
         costByModel[model] = {
           cost,
           tokens,
           tier,
-          displayName: MODEL_PRICING[tier]?.displayName,
-          color: MODEL_PRICING[tier]?.color,
+          displayName: effectivePricing[tier]?.displayName,
+          color: effectivePricing[tier]?.color,
         };
         totalApiCost += cost;
       }
@@ -310,7 +342,8 @@ app.get('/api/usage', (_req, res) => {
                       (globalUsage.cacheCreationInputTokens || 0) * ratio
                     ),
                   },
-                  model
+                  model,
+                  effectivePricing
                 );
               }
             }
@@ -386,7 +419,7 @@ app.get('/api/usage', (_req, res) => {
         a.month.localeCompare(b.month)
       ),
       sessions: allSessions.slice(0, 75),
-      modelPricing: MODEL_PRICING,
+      modelPricing: effectivePricing,
     });
   } catch (err) {
     console.error('Error building usage response:', err);

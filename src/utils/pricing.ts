@@ -1,38 +1,78 @@
-import { SubscriptionTier } from '../types';
+import { PricingSettings, SubscriptionTier } from '../types';
 
-export const SUBSCRIPTION_TIERS: {
-  value: SubscriptionTier;
-  label: string;
-  description: string;
-  color: string;
-  bg: string;
-  border: string;
-}[] = [
-  {
-    value: 20,
-    label: 'Pro',
-    description: '$20 / mo',
-    color: 'text-blue-400',
-    bg: 'bg-blue-500/10',
-    border: 'border-blue-500/50',
+// ── Default pricing constants ─────────────────────────────────────────────────
+
+export const DEFAULT_PRICING_SETTINGS: PricingSettings = {
+  modelPricing: {
+    opus: { input: 15.0, output: 75.0, cacheCreation: 18.75, cacheRead: 1.5 },
+    sonnet: { input: 3.0, output: 15.0, cacheCreation: 3.75, cacheRead: 0.3 },
+    haiku: { input: 0.8, output: 4.0, cacheCreation: 1.0, cacheRead: 0.08 },
   },
-  {
-    value: 100,
-    label: 'Max 5×',
-    description: '$100 / mo',
-    color: 'text-violet-400',
-    bg: 'bg-violet-500/10',
-    border: 'border-violet-500/50',
-  },
-  {
-    value: 200,
-    label: 'Max 20×',
-    description: '$200 / mo',
-    color: 'text-fuchsia-400',
-    bg: 'bg-fuchsia-500/10',
-    border: 'border-fuchsia-500/50',
-  },
-];
+  subscriptionTiers: { pro: 20, max5x: 100, max20x: 200 },
+};
+
+export const STORAGE_KEY = 'burnitdown-pricing-settings';
+
+export function loadPricingSettings(): PricingSettings {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return DEFAULT_PRICING_SETTINGS;
+    const parsed = JSON.parse(raw) as PricingSettings;
+    // Deep-merge with defaults so new fields always exist
+    return {
+      modelPricing: {
+        opus: { ...DEFAULT_PRICING_SETTINGS.modelPricing.opus, ...parsed.modelPricing?.opus },
+        sonnet: { ...DEFAULT_PRICING_SETTINGS.modelPricing.sonnet, ...parsed.modelPricing?.sonnet },
+        haiku: { ...DEFAULT_PRICING_SETTINGS.modelPricing.haiku, ...parsed.modelPricing?.haiku },
+      },
+      subscriptionTiers: { ...DEFAULT_PRICING_SETTINGS.subscriptionTiers, ...parsed.subscriptionTiers },
+    };
+  } catch {
+    return DEFAULT_PRICING_SETTINGS;
+  }
+}
+
+export function savePricingSettings(s: PricingSettings): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+  } catch {}
+}
+
+// ── Subscription tier display helpers ────────────────────────────────────────
+
+export function buildSubscriptionTiers(costs: PricingSettings['subscriptionTiers']) {
+  return [
+    {
+      value: costs.pro,
+      label: 'Pro',
+      description: `$${costs.pro} / mo`,
+      color: 'text-blue-400',
+      bg: 'bg-blue-500/10',
+      border: 'border-blue-500/50',
+    },
+    {
+      value: costs.max5x,
+      label: 'Max 5×',
+      description: `$${costs.max5x} / mo`,
+      color: 'text-violet-400',
+      bg: 'bg-violet-500/10',
+      border: 'border-violet-500/50',
+    },
+    {
+      value: costs.max20x,
+      label: 'Max 20×',
+      description: `$${costs.max20x} / mo`,
+      color: 'text-fuchsia-400',
+      bg: 'bg-fuchsia-500/10',
+      border: 'border-fuchsia-500/50',
+    },
+  ] as const;
+}
+
+/** Convenience export using the defaults (used in places that don't need custom tiers) */
+export const SUBSCRIPTION_TIERS = buildSubscriptionTiers(
+  DEFAULT_PRICING_SETTINGS.subscriptionTiers
+);
 
 export function formatCost(usd: number): string {
   if (usd >= 1000) return `$${(usd / 1000).toFixed(2)}k`;

@@ -1,20 +1,29 @@
 import React from 'react';
 import { SubscriptionTier } from '../types';
-import { SUBSCRIPTION_TIERS } from '../utils/pricing';
+
+interface Tier {
+  value: SubscriptionTier;
+  label: string;
+  description: string;
+  color: string;
+  bg: string;
+  border: string;
+}
 
 interface Props {
   value: SubscriptionTier;
   onChange: (tier: SubscriptionTier) => void;
+  tiers: readonly Tier[];
 }
 
-export function SubscriptionSelector({ value, onChange }: Props) {
+export function SubscriptionSelector({ value, onChange, tiers }: Props) {
   return (
     <div className="flex items-center gap-1 rounded-xl border border-slate-700/60 bg-slate-800/50 p-1">
-      {SUBSCRIPTION_TIERS.map((tier) => {
+      {tiers.map((tier) => {
         const isActive = value === tier.value;
         return (
           <button
-            key={tier.value}
+            key={tier.label}
             onClick={() => onChange(tier.value)}
             className={`flex flex-col items-center rounded-lg px-3 py-2 transition-all duration-200 min-w-[72px] ${
               isActive

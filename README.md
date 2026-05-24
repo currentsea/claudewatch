@@ -4,17 +4,31 @@ A real-time dashboard that reads your local **Claude Code** (`~/.claude`) data f
 
 ---
 
+## Screenshots
+
+### Dashboard
+
+![BurnItDown Dashboard](docs/screenshot-dashboard.png)
+
+### Pricing Settings
+
+![BurnItDown Pricing Settings](docs/screenshot-settings.png)
+
+---
+
 ## Features
+
+The dashboard is focused on one question: **how much is Anthropic spending to serve you vs. how much you pay them in subscription?**
 
 | Feature | Detail |
 |---|---|
-| 📊 **Live polling** | Re-reads `~/.claude` every 10 s (configurable) |
-| 💰 **Cost estimation** | Computes API-equivalent spend using public Anthropic pricing |
-| 🔥 **Burn meter** | Projects current-period usage to a full month and shows delta vs subscription |
+| 💰 **Cost stat cards** | All-time API-equivalent spend, this-period spend, net value vs subscription, and Anthropic's all-time net P&L |
+| 🔥 **Burn meter** | Projects current-period spend to a full month and shows delta vs your subscription |
+| 📊 **Monthly comparison** | Per-month API cost bars against your flat subscription line |
+| 📉 **Anthropic P&L** | Their revenue (your subscription × months) minus their estimated compute cost — over your entire history |
+| ⏱️ **Spending per tick** | Every refresh interval (default 1m 30s), records the incremental cost since the last tick; paginated 10/page |
 | 📅 **Billing period** | Configurable start day so numbers align with your actual renewal date |
-| 🤖 **Model breakdown** | Opus / Sonnet / Haiku split with per-model pricing |
-| 📈 **Charts** | Daily token usage, monthly cost bars, token type breakdown |
-| 🗂️ **Session browser** | Sortable table of every session with cache-hit rate + API cost |
+| ⚙️ **Pricing settings** | Edit every API rate and subscription cost in-app; persisted to `localStorage` |
 | 🎨 **Responsive dark UI** | Tailwind CSS, works on desktop and mobile |
 
 ---
@@ -87,21 +101,55 @@ Toggle between three reference tiers in the dashboard header:
 
 The dashboard computes the **API-equivalent** cost of your actual usage and shows the net savings (or deficit) vs the selected tier.
 
+> **Customising tier costs:** click **Settings** in the header to edit the monthly cost of each tier.  This is useful if you're on annual billing, a team plan, or a regional price.
+
 ---
 
 ## How cost estimation works
 
-For each assistant message in `~/.claude/projects/**/*.jsonl`, the server reads the `usage` block and multiplies by public Anthropic API rates (2025):
+For each assistant message in `~/.claude/projects/**/*.jsonl`, the server reads the `usage` block and multiplies by the configured API rates:
+
+```
+cost = (input_tokens          × input_rate        / 1 000 000)
+     + (output_tokens         × output_rate       / 1 000 000)
+     + (cache_creation_tokens × cache_write_rate  / 1 000 000)
+     + (cache_read_tokens     × cache_read_rate   / 1 000 000)
+```
+
+The model name (e.g. `claude-opus-4-5`, `claude-sonnet-4-5`) is mapped to the Opus / Sonnet / Haiku tier and the matching rate is used.
+
+### Default rates (USD per 1 million tokens)
 
 | Model | Input | Output | Cache write | Cache read |
 |---|---|---|---|---|
-| **Opus** | $15/M | $75/M | $18.75/M | $1.50/M |
-| **Sonnet** | $3/M | $15/M | $3.75/M | $0.30/M |
-| **Haiku** | $0.80/M | $4/M | $1.00/M | $0.08/M |
+| **Claude Opus** | $15 | $75 | $18.75 | $1.50 |
+| **Claude Sonnet** | $3 | $15 | $3.75 | $0.30 |
+| **Claude Haiku** | $0.80 | $4 | $1.00 | $0.08 |
 
 These are estimates — your Claude.ai subscription is flat-rate. The numbers show what the same usage would cost on pay-per-use API billing.
 
-To update rates, edit `MODEL_PRICING` at the top of **`server/index.js`**.
+### Editing rates in-app
+
+Open **Settings → Model API Rates** to change any value.  Changes are:
+- saved to `localStorage` immediately
+- applied to all dashboard calculations on the next data refresh
+
+You can also reset individual models (or all models) to their defaults with the **↺ reset** button.
+
+---
+
+## Pricing sources
+
+The default rates are taken directly from Anthropic's public documentation.
+
+| Source | URL | What it covers |
+|---|---|---|
+| **Anthropic Pricing page** | [anthropic.com/pricing](https://www.anthropic.com/pricing) | Per-token input / output / cache rates for every model tier |
+| **Model overview (Anthropic Docs)** | [docs.anthropic.com/en/docs/about-claude/models/overview](https://docs.anthropic.com/en/docs/about-claude/models/overview) | Maps model ID strings (found in JSONL files) to Opus / Sonnet / Haiku pricing tiers |
+| **Claude.ai plans** | [claude.ai/upgrade](https://claude.ai/upgrade) | Flat-rate subscription costs: Pro $20/mo, Max 5× $100/mo, Max 20× $200/mo |
+| **Prompt Caching (Anthropic Docs)** | [docs.anthropic.com/en/docs/build-with-claude/prompt-caching](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching) | Cache write = 125% of input rate; cache read = 10% of input rate; defines the `cache_creation_input_tokens` / `cache_read_input_tokens` fields |
+
+> Rates verified **May 2025**.  If Anthropic changes pricing, update the fields in **Settings** — they persist in your browser without needing a code change.
 
 ---
 
@@ -109,15 +157,19 @@ To update rates, edit `MODEL_PRICING` at the top of **`server/index.js`**.
 
 ```
 burnitdown/
+├── docs/
+│   ├── screenshot-dashboard.png
+│   └── screenshot-settings.png
 ├── server/
-│   └── index.js               # Express API server
+│   └── index.js               # Express API server (accepts ?pricing= override)
 ├── src/
-│   ├── App.tsx                 # Main dashboard
+│   ├── App.tsx                 # Main app — dashboard + settings pages
 │   ├── index.css               # Tailwind directives
 │   ├── types/index.ts
-│   ├── utils/pricing.ts
-│   ├── hooks/useUsageData.ts   # Polling hook
+│   ├── utils/pricing.ts        # DEFAULT_PRICING_SETTINGS, localStorage helpers
+│   ├── hooks/useUsageData.ts   # Polling hook (passes custom pricing to server)
 │   └── components/
+│       ├── PricingSettingsPanel.tsx  ← NEW — editable pricing UI + sources
 │       ├── StatCard.tsx
 │       ├── UsageChart.tsx
 │       ├── ModelBreakdown.tsx
@@ -125,7 +177,8 @@ burnitdown/
 │       ├── BurnMeter.tsx
 │       ├── TokenBreakdown.tsx
 │       ├── SessionsTable.tsx
-│       └── SubscriptionSelector.tsx
+│       ├── SubscriptionSelector.tsx
+│       └── AnthropicPnL.tsx
 ├── .env.example
 ├── tailwind.config.js
 └── package.json
