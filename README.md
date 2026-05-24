@@ -1,46 +1,138 @@
-# Getting Started with Create React App
+# 🔥 BurnItDown — Claude Usage Dashboard
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A real-time dashboard that reads your local **Claude Code** (`~/.claude`) data files, calculates the API-equivalent cost of every token you have consumed, and compares it against your flat-rate subscription — so you can see exactly whether you are burning through value or leaving money on the table.
 
-## Available Scripts
+---
 
-In the project directory, you can run:
+## Features
 
-### `npm start`
+| Feature | Detail |
+|---|---|
+| 📊 **Live polling** | Re-reads `~/.claude` every 10 s (configurable) |
+| 💰 **Cost estimation** | Computes API-equivalent spend using public Anthropic pricing |
+| 🔥 **Burn meter** | Projects current-period usage to a full month and shows delta vs subscription |
+| 📅 **Billing period** | Configurable start day so numbers align with your actual renewal date |
+| 🤖 **Model breakdown** | Opus / Sonnet / Haiku split with per-model pricing |
+| 📈 **Charts** | Daily token usage, monthly cost bars, token type breakdown |
+| 🗂️ **Session browser** | Sortable table of every session with cache-hit rate + API cost |
+| 🎨 **Responsive dark UI** | Tailwind CSS, works on desktop and mobile |
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+---
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+## Prerequisites
 
-### `npm test`
+| Requirement | Version |
+|---|---|
+| Node.js | >= 18 |
+| npm | >= 9 |
+| Claude Code CLI | installed and used at least once |
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+---
 
-### `npm run build`
+## Quick Start
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+```bash
+# 1. Install dependencies
+npm install
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+# 2. Optional: copy and edit the environment file
+cp .env.example .env
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+# 3. Start both servers with one command
+npm start
+```
 
-### `npm run eject`
+`npm start` launches:
+- **Backend API** on `http://localhost:3001` — reads `~/.claude`
+- **React frontend** on `http://localhost:3000` — auto-opens in your browser
 
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
+You can also run them separately:
 
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+```bash
+npm run server   # start only the API server
+npm run client   # start only the React dev server
+```
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
+---
 
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
+## Configuration
 
-## Learn More
+Copy `.env.example` to `.env` and override any variables you need.
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+### Backend variables (read by `server/index.js`)
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+| Variable | Default | Description |
+|---|---|---|
+| `CLAUDE_DATA_PATH` | `~/.claude` | Absolute path to your Claude Code data directory. Only change if you moved it. |
+| `SERVER_PORT` | `3001` | TCP port for the Express API server. If you change this, also update the `proxy` field in `package.json`. |
+| `BILLING_DAY` | `1` | Day-of-month when your Anthropic subscription renews. E.g. `15` if you subscribed on the 15th. |
+
+### Frontend variables (REACT_APP_* are baked in at build time)
+
+| Variable | Default | Description |
+|---|---|---|
+| `REACT_APP_REFRESH_INTERVAL` | `10` | Polling interval in **seconds**. Lower = more real-time. Minimum recommended: 5. |
+
+---
+
+## Subscription tiers
+
+Toggle between three reference tiers in the dashboard header:
+
+| Tier | Monthly cost | Typical plan |
+|---|---|---|
+| **Pro** | $20 | Claude.ai Pro (individual) |
+| **Max 5x** | $100 | Claude.ai Max (5x usage) |
+| **Max 20x** | $200 | Claude.ai Max (20x usage) |
+
+The dashboard computes the **API-equivalent** cost of your actual usage and shows the net savings (or deficit) vs the selected tier.
+
+---
+
+## How cost estimation works
+
+For each assistant message in `~/.claude/projects/**/*.jsonl`, the server reads the `usage` block and multiplies by public Anthropic API rates (2025):
+
+| Model | Input | Output | Cache write | Cache read |
+|---|---|---|---|---|
+| **Opus** | $15/M | $75/M | $18.75/M | $1.50/M |
+| **Sonnet** | $3/M | $15/M | $3.75/M | $0.30/M |
+| **Haiku** | $0.80/M | $4/M | $1.00/M | $0.08/M |
+
+These are estimates — your Claude.ai subscription is flat-rate. The numbers show what the same usage would cost on pay-per-use API billing.
+
+To update rates, edit `MODEL_PRICING` at the top of **`server/index.js`**.
+
+---
+
+## Project structure
+
+```
+burnitdown/
+├── server/
+│   └── index.js               # Express API server
+├── src/
+│   ├── App.tsx                 # Main dashboard
+│   ├── index.css               # Tailwind directives
+│   ├── types/index.ts
+│   ├── utils/pricing.ts
+│   ├── hooks/useUsageData.ts   # Polling hook
+│   └── components/
+│       ├── StatCard.tsx
+│       ├── UsageChart.tsx
+│       ├── ModelBreakdown.tsx
+│       ├── CostComparison.tsx
+│       ├── BurnMeter.tsx
+│       ├── TokenBreakdown.tsx
+│       ├── SessionsTable.tsx
+│       └── SubscriptionSelector.tsx
+├── .env.example
+├── tailwind.config.js
+└── package.json
+```
+
+---
+
+## License
+
+MIT
