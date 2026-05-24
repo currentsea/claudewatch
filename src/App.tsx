@@ -33,6 +33,8 @@ import { SubscriptionSelector } from './components/SubscriptionSelector';
 import { AnthropicPnL } from './components/AnthropicPnL';
 import { PricingSettingsPanel } from './components/PricingSettingsPanel';
 import { TickHistory } from './components/TickHistory';
+import { DailyPnL } from './components/DailyPnL';
+import { SessionsTable } from './components/SessionsTable';
 
 type Page = 'dashboard' | 'settings';
 
@@ -437,6 +439,33 @@ export default function App() {
                     ticks={ticks}
                     intervalMs={intervalMs}
                     onClear={clearTicks}
+                  />
+                </div>
+
+                {/* ── Session P&L ──────────────────────────────────────────── */}
+                <div className="mb-4 flex items-center gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                    Session P&amp;L vs Subscription
+                  </span>
+                  <div className="flex-1 border-t border-slate-700/60" />
+                  <span className={`text-xs font-medium ${sub.color}`}>
+                    {sub.label} · {formatCost(subscriptionCost)}/mo
+                  </span>
+                </div>
+
+                {/* Daily P&L chart */}
+                <div className="mb-4">
+                  <DailyPnL
+                    dailyActivity={data.dailyActivity}
+                    subscriptionCost={subscriptionCost}
+                  />
+                </div>
+
+                {/* Per-session breakdown table */}
+                <div className="mb-6">
+                  <SessionsTable
+                    sessions={data.sessions}
+                    subscriptionCost={subscriptionCost}
                   />
                 </div>
 
