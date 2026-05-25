@@ -53,7 +53,7 @@ export function TokenBreakdown({ totalStats }: Props) {
   const cachePct = total > 0 ? ((cacheTotal / total) * 100).toFixed(1) : '0';
 
   return (
-    <div className="rounded-2xl border border-slate-700/60 bg-slate-800/50 p-5 backdrop-blur-sm">
+    <div className="rounded-2xl border border-slate-700/60 bg-black/10 p-5 backdrop-blur-sm">
       <div className="mb-4 flex items-start justify-between">
         <div>
           <h3 className="text-sm font-semibold text-white">Token Breakdown</h3>

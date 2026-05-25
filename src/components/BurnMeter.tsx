@@ -16,7 +16,6 @@ export function BurnMeter({
 }: Props) {
   const projected = projectMonthly(currentPeriodCost, billingPeriodStart);
   const pct = Math.min((currentPeriodCost / subscriptionCost) * 100, 100);
-  const projectedPct = Math.min((projected / subscriptionCost) * 100, 100);
   const isOverBudget = projected > subscriptionCost;
 
   const start = new Date(billingPeriodStart);
@@ -35,7 +34,7 @@ export function BurnMeter({
     'from-red-500 to-red-400';
 
   return (
-    <div className="rounded-2xl border border-slate-700/60 bg-slate-800/50 p-5 backdrop-blur-sm">
+    <div className="rounded-2xl border border-slate-700/60 bg-black/10 p-5 backdrop-blur-sm">
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold text-white">Burn Rate</h3>
@@ -91,7 +90,7 @@ export function BurnMeter({
         <p className={`text-lg font-bold ${isOverBudget ? 'text-red-400' : 'text-emerald-400'}`}>
           {formatCost(projected)}
           <span className="ml-2 text-sm font-normal text-slate-500">
-            ({projectedPct.toFixed(0)}% of sub)
+            / {formatCost(subscriptionCost)} sub
           </span>
         </p>
         <p className="mt-0.5 text-xs text-slate-500">

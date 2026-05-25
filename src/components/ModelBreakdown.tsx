@@ -88,7 +88,7 @@ export function ModelBreakdown({ computedCosts }: Props) {
   }
 
   return (
-    <div className="rounded-2xl border border-slate-700/60 bg-slate-800/50 p-5 backdrop-blur-sm">
+    <div className="rounded-2xl border border-slate-700/60 bg-black/10 p-5 backdrop-blur-sm">
       <div className="mb-4">
         <h3 className="text-sm font-semibold text-white">Model Breakdown</h3>
         <p className="text-xs text-slate-500">API cost share by model</p>

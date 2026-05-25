@@ -1,5 +1,5 @@
 import React from 'react';
-import { LucideIcon } from 'lucide-react';
+import { LucideIcon, ChevronRight } from 'lucide-react';
 
 interface StatCardProps {
   title: string;
@@ -14,6 +14,9 @@ interface StatCardProps {
     good?: boolean; // true = green, false = red
   };
   badge?: { label: string; color: string };
+  /** When provided, renders a clickable drilldown affordance */
+  onDrilldown?: () => void;
+  drilldownLabel?: string;
 }
 
 export function StatCard({
@@ -25,9 +28,19 @@ export function StatCard({
   valueColor = 'text-white',
   trend,
   badge,
+  onDrilldown,
+  drilldownLabel = 'See breakdown',
 }: StatCardProps) {
+  const Wrapper = onDrilldown ? 'button' : 'div';
+
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-slate-700/60 bg-slate-800/50 p-5 backdrop-blur-sm transition-all duration-300 hover:border-slate-600 hover:bg-slate-800/70">
+    <Wrapper
+      className={`relative overflow-hidden rounded-2xl border border-slate-700/60 bg-black/10 p-5 backdrop-blur-sm transition-all duration-300 hover:border-slate-600 hover:bg-black/20 text-left w-full ${
+        onDrilldown ? 'cursor-pointer group' : ''
+      }`}
+      onClick={onDrilldown}
+      aria-label={onDrilldown ? `${title} — ${drilldownLabel}` : undefined}
+    >
       {/* Subtle gradient background */}
       <div className="pointer-events-none absolute inset-0 rounded-2xl bg-gradient-to-br from-slate-700/10 to-transparent" />
 
@@ -77,7 +90,14 @@ export function StatCard({
             </span>
           </div>
         )}
+
+        {onDrilldown && (
+          <div className="mt-3 flex items-center gap-1 text-xs text-slate-600 group-hover:text-slate-400 transition-colors">
+            <ChevronRight size={12} />
+            {drilldownLabel}
+          </div>
+        )}
       </div>
-    </div>
+    </Wrapper>
   );
 }

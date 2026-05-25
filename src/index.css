@@ -17,18 +17,112 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
 }
 
-/* Scrollbar styling */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+/* ── Scrollbar styling (dark) ───────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #1e293b; }
+::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+/* ── Light mode ─────────────────────────────────────────────────────────────── */
+/* Applied when .light-mode is on the root wrapper div (toggled via React).     */
+
+.light-mode {
+  background-color: #f8fafc;
+  color: #0f172a;
 }
-::-webkit-scrollbar-track {
+
+body:has(.light-mode) {
+  background-color: #f8fafc;
+}
+
+/* Scrollbars */
+.light-mode ::-webkit-scrollbar-track { background: #e2e8f0; }
+.light-mode ::-webkit-scrollbar-thumb { background: #94a3b8; }
+.light-mode ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+/* Backgrounds */
+.light-mode .bg-slate-900,
+.light-mode .bg-slate-900\/80 { background-color: #f8fafc !important; }
+.light-mode .bg-slate-950 { background-color: #f1f5f9 !important; }
+.light-mode .bg-slate-950\/40 { background-color: rgba(241,245,249,.6) !important; }
+.light-mode .bg-slate-800 { background-color: #e2e8f0 !important; }
+.light-mode .bg-slate-800\/50 { background-color: rgba(226,232,240,.7) !important; }
+.light-mode .bg-slate-800\/30 { background-color: rgba(226,232,240,.4) !important; }
+.light-mode .bg-slate-900\/20 { background-color: rgba(248,250,252,.5) !important; }
+.light-mode .bg-slate-900\/60 { background-color: rgba(226,232,240,.9) !important; }
+.light-mode .bg-slate-900\/40 { background-color: rgba(241,245,249,.8) !important; }
+.light-mode .bg-black\/10 { background-color: rgba(255,255,255,.7) !important; }
+.light-mode .bg-black\/20 { background-color: rgba(255,255,255,.9) !important; }
+
+/* Borders */
+.light-mode .border-slate-700\/60 { border-color: rgba(148,163,184,.5) !important; }
+.light-mode .border-slate-700\/40 { border-color: rgba(148,163,184,.4) !important; }
+.light-mode .border-slate-700\/30 { border-color: rgba(148,163,184,.3) !important; }
+.light-mode .border-slate-700 { border-color: #94a3b8 !important; }
+.light-mode .border-slate-800 { border-color: #cbd5e1 !important; }
+
+/* Text */
+.light-mode .text-white { color: #0f172a !important; }
+.light-mode .text-slate-100 { color: #1e293b !important; }
+.light-mode .text-slate-200 { color: #334155 !important; }
+.light-mode .text-slate-300 { color: #475569 !important; }
+.light-mode .text-slate-400 { color: #64748b !important; }
+.light-mode .text-slate-500 { color: #94a3b8 !important; }
+.light-mode .text-slate-600 { color: #94a3b8 !important; }
+.light-mode .text-slate-700 { color: #94a3b8 !important; }
+
+/* Interactive states */
+.light-mode .hover\:bg-slate-800:hover { background-color: #e2e8f0 !important; }
+.light-mode .hover\:border-slate-600:hover { border-color: #94a3b8 !important; }
+.light-mode .hover\:text-white:hover { color: #0f172a !important; }
+.light-mode .hover\:bg-slate-700\/20:hover { background-color: rgba(203,213,225,.4) !important; }
+
+/* Code / monospace elements */
+.light-mode .bg-slate-800\/60,
+.light-mode code.rounded { background-color: rgba(226,232,240,.8) !important; }
+.light-mode .bg-slate-700\/50 { background-color: rgba(203,213,225,.6) !important; }
+.light-mode .bg-slate-700\/60 { background-color: rgba(203,213,225,.7) !important; }
+.light-mode .bg-slate-700 { background-color: #cbd5e1 !important; }
+
+/* Backdrops */
+.light-mode .backdrop-blur-sm { backdrop-filter: blur(4px); }
+.light-mode .bg-black\/60 { background-color: rgba(0,0,0,.3) !important; }
+
+/* Ring / focus */
+.light-mode .ring-1 { --tw-ring-opacity: 0.4; }
+
+/* Tooltip overlay */
+.bd-tooltip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.bd-tooltip .bd-tooltip-content {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 280px;
   background: #1e293b;
+  border: 1px solid rgba(100,116,139,0.4);
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 12px;
+  color: #94a3b8;
+  line-height: 1.6;
+  z-index: 100;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+  pointer-events: none;
+  text-align: left;
 }
-::-webkit-scrollbar-thumb {
-  background: #475569;
-  border-radius: 3px;
+.bd-tooltip:hover .bd-tooltip-content,
+.bd-tooltip:focus-within .bd-tooltip-content {
+  display: block;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
+.light-mode .bd-tooltip .bd-tooltip-content {
+  background: #f8fafc;
+  border-color: rgba(148,163,184,.4);
+  color: #475569;
+  box-shadow: 0 10px 25px rgba(0,0,0,.12);
 }

@@ -2,11 +2,15 @@ import { PricingSettings, SubscriptionTier } from '../types';
 
 // ── Default pricing constants ─────────────────────────────────────────────────
 
+// Defaults reflect current Anthropic API pricing as of May 2026.
+// Opus 4.5/4.6/4.7 dropped to $5/$25 per MTok (from $15/$75 on Opus 4.1).
+// Sonnet 4.5/4.6 stay at $3/$15. Haiku 4.5 is $1/$5 (Haiku 3.5 was $0.80/$4).
+// Source: https://docs.anthropic.com/en/docs/about-claude/pricing
 export const DEFAULT_PRICING_SETTINGS: PricingSettings = {
   modelPricing: {
-    opus: { input: 15.0, output: 75.0, cacheCreation: 18.75, cacheRead: 1.5 },
+    opus: { input: 5.0, output: 25.0, cacheCreation: 6.25, cacheRead: 0.5 },
     sonnet: { input: 3.0, output: 15.0, cacheCreation: 3.75, cacheRead: 0.3 },
-    haiku: { input: 0.8, output: 4.0, cacheCreation: 1.0, cacheRead: 0.08 },
+    haiku: { input: 1.0, output: 5.0, cacheCreation: 1.25, cacheRead: 0.1 },
   },
   subscriptionTiers: { pro: 20, max5x: 100, max20x: 200 },
 };

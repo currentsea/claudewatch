@@ -96,7 +96,40 @@ export interface UsageData {
   dailyActivity: DailyActivity[];
   monthlyRollup: MonthlyRollup[];
   sessions: Session[];
+  activeSessions: ActiveSession[];
   modelPricing: Record<string, ModelPricing>;
+}
+
+export interface ActiveSession {
+  sessionId: string;
+  project: string;
+  firstActivity: string | null;
+  lastActivity: string | null;
+  minutesSinceLastActivity: number;
+  estimatedCost: number;
+  totalTokens: TokenCounts;
+  messageCount: number;
+  windowEndsAt: string;
+  windowRemainingMs: number;
+  windowElapsedMs: number;
+  windowHours: number;
+}
+
+export interface SessionMessage {
+  role: 'user' | 'assistant';
+  timestamp: string | null;
+  model?: string;
+  tokens?: TokenCounts;
+  toolUses?: number;
+  preview: string;
+}
+
+export interface SessionDetail extends Session {
+  cwd: string | null;
+  gitBranch: string | null;
+  userMessageCount: number;
+  toolUseCount: number;
+  messages: SessionMessage[];
 }
 
 export interface ModelPricing {

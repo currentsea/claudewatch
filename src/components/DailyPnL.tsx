@@ -81,7 +81,7 @@ export function DailyPnL({ dailyActivity, subscriptionCost }: Props) {
 
   if (displayData.length === 0) {
     return (
-      <div className="rounded-2xl border border-slate-700/60 bg-slate-800/50 p-5 backdrop-blur-sm flex items-center justify-center h-48">
+      <div className="rounded-2xl border border-slate-700/60 bg-black/10 p-5 backdrop-blur-sm flex items-center justify-center h-48">
         <p className="text-sm text-slate-500">No daily activity to display</p>
       </div>
     );
@@ -100,7 +100,7 @@ export function DailyPnL({ dailyActivity, subscriptionCost }: Props) {
   const maxCost = Math.max(...displayData.map((d) => d.apiCost), dailyRate * 1.1);
 
   return (
-    <div className="rounded-2xl border border-slate-700/60 bg-slate-800/50 p-5 backdrop-blur-sm space-y-4">
+    <div className="rounded-2xl border border-slate-700/60 bg-black/10 p-5 backdrop-blur-sm space-y-4">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>

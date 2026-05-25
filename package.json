@@ -28,6 +28,8 @@
     "server": "node server/index.js",
     "build": "react-scripts build",
     "test": "react-scripts test",
+    "test:ci": "CI=true react-scripts test --watchAll=false && jest server/",
+    "test:server": "jest server/",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {

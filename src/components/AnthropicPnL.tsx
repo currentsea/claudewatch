@@ -86,7 +86,7 @@ export function AnthropicPnL({
   const isLosingAllTime = profit < 0;
 
   return (
-    <div className="rounded-2xl border border-slate-700/60 bg-slate-800/50 p-5 backdrop-blur-sm space-y-5">
+    <div className="rounded-2xl border border-slate-700/60 bg-black/10 p-5 backdrop-blur-sm space-y-5">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between">
         <div>

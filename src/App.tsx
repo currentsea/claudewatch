@@ -1,11 +1,9 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   Flame,
   RefreshCw,
   DollarSign,
-  BarChart2,
   TrendingUp,
-  TrendingDown,
   Activity,
   Clock,
   MessageSquare,
@@ -13,13 +11,21 @@ import {
   Wifi,
   Settings,
   LayoutDashboard,
+  ServerCrash,
+  Code,
+  Heart,
+  Globe,
+  Sun,
+  Moon,
+  Info,
+  Wrench,
+  Cpu,
 } from 'lucide-react';
 
 import { useUsageData } from './hooks/useUsageData';
 import { PricingSettings, SubscriptionTier } from './types';
 import {
   formatCost,
-  savings,
   anthropicPnL,
   buildSubscriptionTiers,
   loadPricingSettings,
@@ -27,16 +33,41 @@ import {
 } from './utils/pricing';
 
 import { StatCard } from './components/StatCard';
-import { CostComparison } from './components/CostComparison';
 import { BurnMeter } from './components/BurnMeter';
 import { SubscriptionSelector } from './components/SubscriptionSelector';
 import { AnthropicPnL } from './components/AnthropicPnL';
 import { PricingSettingsPanel } from './components/PricingSettingsPanel';
-import { TickHistory } from './components/TickHistory';
-import { DailyPnL } from './components/DailyPnL';
 import { SessionsTable } from './components/SessionsTable';
+import { SubsidyHero } from './components/SubsidyHero';
+import { CostFlowDiagram } from './components/CostFlowDiagram';
+import { ActiveSessionsPanel } from './components/ActiveSessionsPanel';
+import { SessionDrilldownModal } from './components/SessionDrilldownModal';
+import { DonatePage } from './components/DonatePage';
+import { LandingPage } from './components/LandingPage';
+import {
+  PeriodApiCostDrilldown,
+  AllTimeApiDrilldown,
+  NetValueDrilldown,
+} from './components/DrilldownModal';
 
-type Page = 'dashboard' | 'settings';
+type Page = 'dashboard' | 'settings' | 'donate' | 'about';
+type StatDrilldown = 'periodApiCost' | 'allTimeApi' | 'netValue' | null;
+
+const THEME_KEY = 'burnitdown-theme';
+
+function loadTheme(): 'dark' | 'light' {
+  try {
+    const stored = localStorage.getItem(THEME_KEY);
+    if (stored === 'light') return 'light';
+  } catch {}
+  return 'dark';
+}
+
+function saveTheme(theme: 'dark' | 'light'): void {
+  try {
+    localStorage.setItem(THEME_KEY, theme);
+  } catch {}
+}
 
 // ── Loader ────────────────────────────────────────────────────────────────────
 function Loader() {
@@ -45,9 +76,7 @@ function Loader() {
       <div className="text-center">
         <Flame size={48} className="mx-auto mb-4 animate-bounce text-orange-400" />
         <p className="text-lg font-semibold text-white">Loading usage data…</p>
-        <p className="mt-1 text-sm text-slate-400">
-          Reading Claude session files
-        </p>
+        <p className="mt-1 text-sm text-slate-400">Reading Claude session files</p>
       </div>
     </div>
   );
@@ -78,28 +107,145 @@ function ErrorBanner({ message, onRetry }: { message: string; onRetry: () => voi
   );
 }
 
+// ── Disclaimer banner ─────────────────────────────────────────────────────────
+function DisclaimerBanner() {
+  return (
+    <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs text-amber-200/70 leading-relaxed">
+      <div className="flex gap-2">
+        <Info size={13} className="mt-0.5 shrink-0 text-amber-400/70" />
+        <p>
+          <strong className="text-amber-300/80">Data disclaimer:</strong>{' '}
+          BurnItDown provides cost estimates for informational purposes only. All figures
+          are derived from local session files and publicly available API pricing, and may
+          not reflect your actual billing. Anthropic's true compute costs differ from
+          published API list prices. We take no responsibility for the accuracy of the data
+          presented. All information is provided on an as-is basis. It is ultimately the
+          end user's responsibility to validate their cost–benefit analysis when using AI
+          assistance tools.{' '}
+          <a
+            href="https://www.anthropic.com/pricing"
+            target="_blank"
+            rel="noreferrer"
+            className="underline underline-offset-2 hover:text-amber-200"
+          >
+            Verify rates at anthropic.com/pricing
+          </a>
+          .
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ── Tools & MCP info panel ────────────────────────────────────────────────────
+function ToolsInfoPanel() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-2xl border border-slate-700/60 bg-black/10 p-5 backdrop-blur-sm">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between text-left"
+      >
+        <div className="flex items-center gap-2">
+          <Wrench size={14} className="text-cyan-400" />
+          <h3 className="text-sm font-semibold text-white">
+            Tools &amp; MCP Servers Detected
+          </h3>
+        </div>
+        <span className="text-xs text-slate-500">{open ? '▲ collapse' : '▼ expand'}</span>
+      </button>
+
+      {open && (
+        <div className="mt-4 space-y-4">
+          <p className="text-xs text-slate-400 leading-relaxed">
+            BurnItDown reads your Claude session files which contain tool-use records. Below
+            is a breakdown of what types of tool calls are tracked in your usage data. MCP
+            (Model Context Protocol) servers extend Claude's capabilities with additional
+            tools — if you use any, their calls count toward your token usage and are
+            included in the cost calculations above.
+          </p>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {[
+              {
+                icon: Wrench,
+                color: 'text-cyan-400',
+                title: 'Built-in Claude Code Tools',
+                items: [
+                  'Read / Write / Edit (file operations)',
+                  'Bash (shell command execution)',
+                  'WebFetch / WebSearch (web access)',
+                  'Agent (spawning sub-agents)',
+                  'LSP / NotebookEdit / Grep (code tools)',
+                ],
+              },
+              {
+                icon: Cpu,
+                color: 'text-violet-400',
+                title: 'MCP Server Tools',
+                items: [
+                  'Any MCP tools you have connected',
+                  'Database connectors (Notion, Shopify, etc.)',
+                  'API connectors (Gmail, Stripe, etc.)',
+                  'Each MCP tool call consumes tokens',
+                  'Visible in session drilldown timelines',
+                ],
+              },
+            ].map(({ icon: Icon, color, title, items }) => (
+              <div
+                key={title}
+                className="rounded-xl border border-slate-700/40 bg-black/20 p-3"
+              >
+                <div className="mb-2 flex items-center gap-2">
+                  <Icon size={13} className={color} />
+                  <p className="text-xs font-semibold text-slate-300">{title}</p>
+                </div>
+                <ul className="space-y-0.5">
+                  {items.map((item) => (
+                    <li key={item} className="flex items-center gap-1.5 text-xs text-slate-500">
+                      <span className="h-1 w-1 shrink-0 rounded-full bg-slate-600" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-xs text-slate-600">
+            Tool usage appears in the "Tool uses" column of the session table and in the
+            message timeline of any session drilldown. Each tool call's tokens are included
+            in the API cost calculation.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
   const [page, setPage] = useState<Page>('dashboard');
+  const [drilldownSessionId, setDrilldownSessionId] = useState<string | null>(null);
+  const [statDrilldown, setStatDrilldown] = useState<StatDrilldown>(null);
+  const [theme, setTheme] = useState<'dark' | 'light'>(loadTheme);
+
+  // Persist theme
+  useEffect(() => {
+    saveTheme(theme);
+  }, [theme]);
 
   // Custom pricing — loaded from localStorage, persisted on every change
-  const [pricingSettings, setPricingSettings] = useState<PricingSettings>(
-    loadPricingSettings
-  );
+  const [pricingSettings, setPricingSettings] = useState<PricingSettings>(loadPricingSettings);
 
   const handlePricingChange = useCallback((s: PricingSettings) => {
     setPricingSettings(s);
     savePricingSettings(s);
   }, []);
 
-  // Subscription tier (pick the first tier's cost as default)
+  // Subscription tier
   const tiers = buildSubscriptionTiers(pricingSettings.subscriptionTiers);
-  const [subscriptionCost, setSubscriptionCost] = useState<SubscriptionTier>(
-    tiers[0].value
-  );
-
-  // Keep subscriptionCost in sync if the user edits tier costs in settings
-  // (snap to the nearest tier value when it changes)
+  const [subscriptionCost, setSubscriptionCost] = useState<SubscriptionTier>(tiers[0].value);
   const sub = tiers.find((t) => t.value === subscriptionCost) ?? tiers[0];
 
   const {
@@ -109,21 +255,20 @@ export default function App() {
     lastUpdated,
     refresh,
     secondsUntilRefresh,
-    intervalMs,
-    ticks,
-    clearTicks,
   } = useUsageData(true, pricingSettings);
 
   if (loading && !data) return <Loader />;
 
-  // Derived metrics
+  // ── Derived metrics ───────────────────────────────────────────────────────
   const totalApiCost = data?.computedCosts.totalApiCost ?? 0;
   const currentPeriodCost = data?.computedCosts.currentPeriodCost ?? 0;
-  const monthSaved = savings(subscriptionCost, currentPeriodCost);
   const firstSessionDate = data?.totalStats.firstSessionDate ?? null;
   const pnl = anthropicPnL(subscriptionCost, totalApiCost, firstSessionDate);
 
-  // First use date
+  // "subscriber net value" = how much more you'd pay at API rates vs subscription
+  // Positive = subscription is worth it; Negative = API would have been cheaper
+  const subscriberNetValue = currentPeriodCost - subscriptionCost;
+
   const firstDate = data?.totalStats.firstSessionDate
     ? new Date(data.totalStats.firstSessionDate).toLocaleDateString('en-US', {
         month: 'short',
@@ -131,8 +276,19 @@ export default function App() {
       })
     : '—';
 
+  // Total tokens across all sessions (used for session-level cost weighting)
+  const totalAllTimeTokens =
+    (data?.totalStats.totalInputTokens ?? 0) +
+    (data?.totalStats.totalOutputTokens ?? 0) +
+    (data?.totalStats.totalCacheRead ?? 0) +
+    (data?.totalStats.totalCacheCreate ?? 0);
+
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100">
+    <div
+      className={`min-h-screen bg-slate-900 text-slate-100 ${theme === 'light' ? 'light-mode' : ''}`}
+      data-testid="app-root"
+      data-theme={theme}
+    >
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-20 border-b border-slate-700/60 bg-slate-900/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
@@ -151,10 +307,9 @@ export default function App() {
             </div>
           </div>
 
-          {/* Center: nav tabs + subscription selector */}
+          {/* Center nav */}
           <div className="hidden md:flex items-center gap-3">
-            {/* Page tabs */}
-            <div className="flex items-center gap-1 rounded-xl border border-slate-700/60 bg-slate-800/50 p-1">
+            <nav className="flex items-center gap-1 rounded-xl border border-slate-700/60 bg-slate-800/50 p-1">
               <button
                 onClick={() => setPage('dashboard')}
                 className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
@@ -175,9 +330,28 @@ export default function App() {
               >
                 <Settings size={12} /> Settings
               </button>
-            </div>
+              <button
+                onClick={() => setPage('about')}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                  page === 'about'
+                    ? 'bg-slate-700 text-white'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Globe size={12} /> About
+              </button>
+              <button
+                onClick={() => setPage('donate')}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
+                  page === 'donate'
+                    ? 'bg-rose-700 text-white'
+                    : 'text-rose-400 hover:text-rose-300'
+                }`}
+              >
+                <Heart size={12} /> Donate
+              </button>
+            </nav>
 
-            {/* Subscription selector — only on dashboard */}
             {page === 'dashboard' && (
               <SubscriptionSelector
                 value={subscriptionCost}
@@ -187,15 +361,26 @@ export default function App() {
             )}
           </div>
 
-          {/* Right: live indicator + refresh */}
-          <div className="flex items-center gap-3">
-            {/* Live pulse — only on dashboard */}
+          {/* Right: theme toggle + live indicator + refresh */}
+          <div className="flex items-center gap-2">
+            {/* Light/dark toggle */}
+            <button
+              onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300 hover:border-slate-600 hover:text-white transition-all"
+              aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              data-testid="theme-toggle"
+            >
+              {theme === 'dark' ? <Sun size={12} /> : <Moon size={12} />}
+              <span className="hidden sm:inline">
+                {theme === 'dark' ? 'Light' : 'Dark'}
+              </span>
+            </button>
+
             {page === 'dashboard' && (
               <div className="hidden sm:flex items-center gap-2 text-xs text-slate-400">
                 {error ? (
                   <span className="flex items-center gap-1 text-red-400">
-                    <span className="h-2 w-2 rounded-full bg-red-400" />
-                    Error
+                    <span className="h-2 w-2 rounded-full bg-red-400" /> Error
                   </span>
                 ) : (
                   <span className="flex items-center gap-1 text-emerald-400">
@@ -220,7 +405,7 @@ export default function App() {
               </button>
             )}
 
-            {/* Mobile settings icon */}
+            {/* Mobile: settings/donate toggle */}
             <button
               onClick={() => setPage(page === 'settings' ? 'dashboard' : 'settings')}
               className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-all md:hidden ${
@@ -235,7 +420,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Mobile subscription selector — only on dashboard */}
         {page === 'dashboard' && (
           <div className="border-t border-slate-700/60 px-4 py-2 md:hidden">
             <SubscriptionSelector
@@ -249,16 +433,18 @@ export default function App() {
 
       {/* ── Settings page ──────────────────────────────────────────────────── */}
       {page === 'settings' && (
-        <PricingSettingsPanel
-          settings={pricingSettings}
-          onChange={handlePricingChange}
-        />
+        <PricingSettingsPanel settings={pricingSettings} onChange={handlePricingChange} />
       )}
+
+      {/* ── Donate page ────────────────────────────────────────────────────── */}
+      {page === 'donate' && <DonatePage />}
+
+      {/* ── About / Landing page ───────────────────────────────────────────── */}
+      {page === 'about' && <LandingPage />}
 
       {/* ── Dashboard page ─────────────────────────────────────────────────── */}
       {page === 'dashboard' && (
         <>
-          {/* ── Billing period banner ──────────────────────────────────────── */}
           {data && (
             <div className="border-b border-slate-700/30 bg-slate-800/30">
               <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-1 px-4 py-2 sm:px-6">
@@ -295,23 +481,37 @@ export default function App() {
           )}
 
           <main className="mx-auto max-w-7xl px-4 pb-12 pt-6 sm:px-6">
-            {error && !data && (
-              <ErrorBanner message={error} onRetry={refresh} />
-            )}
+            {error && !data && <ErrorBanner message={error} onRetry={refresh} />}
 
             {error && data && (
               <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs text-amber-300">
-                <AlertCircle size={14} /> Refresh error: {error}. Showing last
-                known data.
+                <AlertCircle size={14} /> Refresh error: {error}. Showing last known data.
               </div>
             )}
 
             {data && (
               <>
-                {/* ── Section label ───────────────────────────────────────── */}
+                {/* ── Disclaimer ───────────────────────────────────────────────── */}
+                <div className="mb-6">
+                  <DisclaimerBanner />
+                </div>
+
+                {/* ── HERO ─────────────────────────────────────────────────────── */}
+                <div className="mb-6">
+                  <SubsidyHero
+                    subscriptionCost={subscriptionCost}
+                    totalApiCost={totalApiCost}
+                    currentPeriodCost={currentPeriodCost}
+                    firstSessionDate={firstSessionDate}
+                    subscriptionLabel={`${sub.label} (${formatCost(subscriptionCost)}/mo)`}
+                    billingPeriodStart={data.billingPeriodStart}
+                  />
+                </div>
+
+                {/* ── Live section ──────────────────────────────────────────────── */}
                 <div className="mb-4 flex items-center gap-2">
                   <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                    Overview
+                    Live
                   </span>
                   <div className="flex-1 border-t border-slate-700/60" />
                   <span className={`text-xs font-medium ${sub.color}`}>
@@ -319,87 +519,105 @@ export default function App() {
                   </span>
                 </div>
 
-                {/* ── Stat cards ──────────────────────────────────────────── */}
-                <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <StatCard
-                    title="All-Time API Equiv."
-                    value={formatCost(totalApiCost)}
-                    subtitle="If charged at Anthropic API rates"
-                    icon={DollarSign}
-                    iconColor="text-amber-400"
-                    valueColor="text-amber-300"
-                  />
-                  <StatCard
-                    title="This Period API Cost"
-                    value={formatCost(currentPeriodCost)}
-                    subtitle={`vs ${formatCost(subscriptionCost)} subscription`}
-                    icon={BarChart2}
-                    iconColor="text-blue-400"
-                    valueColor="text-blue-300"
-                    trend={
-                      monthSaved >= 0
-                        ? {
-                            direction: 'down',
-                            label: `Saved ${formatCost(Math.abs(monthSaved))} this period`,
-                            good: true,
-                          }
-                        : {
-                            direction: 'up',
-                            label: `API cheaper by ${formatCost(Math.abs(monthSaved))}`,
-                            good: false,
-                          }
-                    }
-                  />
-                  <StatCard
-                    title="Net Value (Period)"
-                    value={
-                      monthSaved >= 0
-                        ? `+${formatCost(monthSaved)}`
-                        : formatCost(monthSaved)
-                    }
-                    subtitle={
-                      monthSaved >= 0
-                        ? 'Subscription worth it 🎉'
-                        : 'API would be cheaper'
-                    }
-                    icon={TrendingUp}
-                    iconColor={monthSaved >= 0 ? 'text-emerald-400' : 'text-red-400'}
-                    valueColor={monthSaved >= 0 ? 'text-emerald-300' : 'text-red-300'}
-                    badge={
-                      monthSaved >= 0
-                        ? {
-                            label: '✓ Good value',
-                            color:
-                              'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20',
-                          }
-                        : {
-                            label: '↓ Under-utilised',
-                            color:
-                              'bg-amber-500/10 text-amber-400 border border-amber-500/20',
-                          }
-                    }
-                  />
-                  <StatCard
-                    title="Anthropic's All-Time Net"
-                    value={
-                      pnl.profit >= 0
-                        ? `+${formatCost(pnl.profit)}`
-                        : `−${formatCost(Math.abs(pnl.profit))}`
-                    }
-                    subtitle={`Over ${pnl.months} month${pnl.months !== 1 ? 's' : ''} · ${formatCost(pnl.revenue)} revenue`}
-                    icon={pnl.profit >= 0 ? TrendingUp : TrendingDown}
-                    iconColor={pnl.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}
-                    valueColor={pnl.profit >= 0 ? 'text-emerald-300' : 'text-red-300'}
-                    badge={{
-                      label: pnl.profit >= 0 ? '📈 Anthropic profits' : '📉 Anthropic loses',
-                      color: pnl.profit >= 0
-                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                        : 'bg-red-500/10 text-red-400 border border-red-500/20',
-                    }}
+                <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+                  <div className="lg:col-span-2">
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* All-Time API Equiv. */}
+                      <StatCard
+                        title="All-Time API Equiv."
+                        value={formatCost(totalApiCost)}
+                        subtitle="If charged at Anthropic API rates"
+                        icon={DollarSign}
+                        iconColor="text-amber-400"
+                        valueColor="text-amber-300"
+                        onDrilldown={() => setStatDrilldown('allTimeApi')}
+                        drilldownLabel="See model breakdown"
+                      />
+
+                      {/* This Period API Cost */}
+                      <StatCard
+                        title="This Period API Cost"
+                        value={formatCost(currentPeriodCost)}
+                        subtitle={`vs ${formatCost(subscriptionCost)} subscription`}
+                        icon={ServerCrash}
+                        iconColor="text-blue-400"
+                        valueColor="text-blue-300"
+                        trend={
+                          currentPeriodCost > subscriptionCost
+                            ? {
+                                direction: 'up',
+                                label: `Saved ${formatCost(currentPeriodCost - subscriptionCost)} vs API`,
+                                good: true,
+                              }
+                            : {
+                                direction: 'down',
+                                label: `API ${formatCost(subscriptionCost - currentPeriodCost)} cheaper`,
+                                good: false,
+                              }
+                        }
+                        onDrilldown={() => setStatDrilldown('periodApiCost')}
+                        drilldownLabel="See period breakdown"
+                      />
+
+                      {/* Net Value (Period) — POSITIVE = subscriber wins */}
+                      <StatCard
+                        title="Net Value (Period)"
+                        value={
+                          subscriberNetValue >= 0
+                            ? `+${formatCost(subscriberNetValue)}`
+                            : `−${formatCost(Math.abs(subscriberNetValue))}`
+                        }
+                        subtitle={
+                          subscriberNetValue >= 0
+                            ? 'Subscription worth it 🎉'
+                            : 'API would be cheaper this period'
+                        }
+                        icon={TrendingUp}
+                        iconColor={subscriberNetValue >= 0 ? 'text-emerald-400' : 'text-red-400'}
+                        valueColor={subscriberNetValue >= 0 ? 'text-emerald-300' : 'text-red-300'}
+                        badge={
+                          subscriberNetValue >= 0
+                            ? {
+                                label: '✓ Good value',
+                                color: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20',
+                              }
+                            : {
+                                label: '↓ Under-utilised',
+                                color: 'bg-amber-500/10 text-amber-400 border border-amber-500/20',
+                              }
+                        }
+                        onDrilldown={() => setStatDrilldown('netValue')}
+                        drilldownLabel="See calculation"
+                      />
+
+                      {/* Anthropic's All-Time Net */}
+                      <StatCard
+                        title="Anthropic's All-Time Net"
+                        value={
+                          pnl.profit >= 0
+                            ? `+${formatCost(pnl.profit)}`
+                            : `−${formatCost(Math.abs(pnl.profit))}`
+                        }
+                        subtitle={`Over ${pnl.months} month${pnl.months !== 1 ? 's' : ''} · ${formatCost(pnl.revenue)} revenue`}
+                        icon={pnl.profit >= 0 ? TrendingUp : Activity}
+                        iconColor={pnl.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}
+                        valueColor={pnl.profit >= 0 ? 'text-emerald-300' : 'text-red-300'}
+                        badge={{
+                          label: pnl.profit >= 0 ? '📈 Anthropic profits' : '📉 Anthropic loses',
+                          color: pnl.profit >= 0
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            : 'bg-red-500/10 text-red-400 border border-red-500/20',
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <ActiveSessionsPanel
+                    activeSessions={data.activeSessions || []}
+                    onSelectSession={(id) => setDrilldownSessionId(id)}
                   />
                 </div>
 
-                {/* ── Cost Analysis + Anthropic P&L ───────────────────────── */}
+                {/* ── Cost Analysis ─────────────────────────────────────────────── */}
                 <div className="mb-4 flex items-center gap-2">
                   <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
                     Cost Analysis
@@ -407,14 +625,10 @@ export default function App() {
                   <div className="flex-1 border-t border-slate-700/60" />
                 </div>
 
-                <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+                <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
                   <BurnMeter
                     currentPeriodCost={currentPeriodCost}
                     billingPeriodStart={data.billingPeriodStart}
-                    subscriptionCost={subscriptionCost}
-                  />
-                  <CostComparison
-                    monthlyRollup={data.monthlyRollup}
                     subscriptionCost={subscriptionCost}
                   />
                   <AnthropicPnL
@@ -426,23 +640,31 @@ export default function App() {
                   />
                 </div>
 
-                {/* ── Tick history ────────────────────────────────────────── */}
+                {/* ── How we get the numbers ────────────────────────────────────── */}
                 <div className="mb-4 flex items-center gap-2">
                   <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                    Spending Per Tick
+                    How we get the numbers
                   </span>
                   <div className="flex-1 border-t border-slate-700/60" />
                 </div>
 
                 <div className="mb-6">
-                  <TickHistory
-                    ticks={ticks}
-                    intervalMs={intervalMs}
-                    onClear={clearTicks}
-                  />
+                  <CostFlowDiagram data={data} subscriptionCost={subscriptionCost} />
                 </div>
 
-                {/* ── Session P&L ──────────────────────────────────────────── */}
+                {/* ── Tools & MCP ───────────────────────────────────────────────── */}
+                <div className="mb-4 flex items-center gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                    Tools &amp; Integrations
+                  </span>
+                  <div className="flex-1 border-t border-slate-700/60" />
+                </div>
+
+                <div className="mb-6">
+                  <ToolsInfoPanel />
+                </div>
+
+                {/* ── Session P&L ───────────────────────────────────────────────── */}
                 <div className="mb-4 flex items-center gap-2">
                   <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
                     Session P&amp;L vs Subscription
@@ -453,41 +675,120 @@ export default function App() {
                   </span>
                 </div>
 
-                {/* Daily P&L chart */}
-                <div className="mb-4">
-                  <DailyPnL
-                    dailyActivity={data.dailyActivity}
-                    subscriptionCost={subscriptionCost}
-                  />
-                </div>
-
-                {/* Per-session breakdown table */}
                 <div className="mb-6">
                   <SessionsTable
                     sessions={data.sessions}
                     subscriptionCost={subscriptionCost}
+                    onSelectSession={(id) => setDrilldownSessionId(id)}
                   />
                 </div>
-
               </>
             )}
           </main>
         </>
       )}
 
+      {/* ── Session drilldown modal ─────────────────────────────────────────── */}
+      {drilldownSessionId && (
+        <SessionDrilldownModal
+          sessionId={drilldownSessionId}
+          pricingSettings={pricingSettings}
+          subscriptionCost={subscriptionCost}
+          totalAllTimeTokens={totalAllTimeTokens}
+          onClose={() => setDrilldownSessionId(null)}
+        />
+      )}
+
+      {/* ── Stat drilldown modals ───────────────────────────────────────────── */}
+      {statDrilldown === 'periodApiCost' && data && (
+        <PeriodApiCostDrilldown
+          computedCosts={data.computedCosts}
+          modelPricing={data.modelPricing}
+          periodStart={data.billingPeriodStart}
+          subscriptionCost={subscriptionCost}
+          onClose={() => setStatDrilldown(null)}
+        />
+      )}
+      {statDrilldown === 'allTimeApi' && data && (
+        <AllTimeApiDrilldown
+          computedCosts={data.computedCosts}
+          modelPricing={data.modelPricing}
+          firstSessionDate={firstSessionDate}
+          onClose={() => setStatDrilldown(null)}
+        />
+      )}
+      {statDrilldown === 'netValue' && data && (
+        <NetValueDrilldown
+          subscriptionCost={subscriptionCost}
+          currentPeriodCost={currentPeriodCost}
+          periodStart={data.billingPeriodStart}
+          onClose={() => setStatDrilldown(null)}
+        />
+      )}
+
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
-      <footer className="border-t border-slate-800 py-4 text-center text-xs text-slate-600">
-        BurnItDown · reading{' '}
-        <code className="rounded bg-slate-800/60 px-1 text-slate-500">
-          ~/.claude
-        </code>{' '}
-        · costs are estimates based on public Anthropic API pricing ·{' '}
-        <button
-          onClick={() => setPage('settings')}
-          className="underline hover:text-slate-400 transition-colors"
-        >
-          edit pricing
-        </button>
+      <footer className="border-t border-slate-800 bg-slate-950/40 py-5">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <div className="flex flex-col items-center justify-between gap-3 text-xs text-slate-500 sm:flex-row">
+            <p>
+              © 2026{' '}
+              <a
+                href="https://github.com/currentsea"
+                target="_blank"
+                rel="noreferrer"
+                className="text-slate-300 underline-offset-2 hover:text-white hover:underline"
+              >
+                Joseph Bull
+              </a>{' '}
+              · MIT licensed
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+              <a
+                href="https://github.com/currentsea/claudewatch"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 text-slate-400 hover:text-white"
+              >
+                <Code size={12} />
+                github.com/currentsea/claudewatch
+              </a>
+              <span className="text-slate-700">·</span>
+              <span>
+                Reading{' '}
+                <code className="rounded bg-slate-800/60 px-1 text-slate-400">
+                  ~/.claude
+                </code>
+              </span>
+              <span className="text-slate-700">·</span>
+              <button
+                onClick={() => setPage('settings')}
+                className="underline-offset-2 hover:text-slate-300 hover:underline"
+              >
+                Edit pricing
+              </button>
+              <span className="text-slate-700">·</span>
+              <button
+                onClick={() => setPage('donate')}
+                className="flex items-center gap-1 text-rose-400 underline-offset-2 hover:text-rose-300 hover:underline"
+              >
+                <Heart size={11} /> Donate
+              </button>
+            </div>
+          </div>
+          <p className="mt-3 text-center text-[10px] text-slate-700">
+            Costs are estimates based on{' '}
+            <a
+              href="https://docs.anthropic.com/en/docs/about-claude/pricing"
+              target="_blank"
+              rel="noreferrer"
+              className="underline-offset-2 hover:text-slate-500 hover:underline"
+            >
+              Anthropic's public API pricing
+            </a>
+            . BurnItDown is unaffiliated with Anthropic. All figures are
+            provided as-is for informational purposes only.
+          </p>
+        </div>
       </footer>
     </div>
   );

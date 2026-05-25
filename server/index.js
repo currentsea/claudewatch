@@ -9,6 +9,15 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+const {
+  MODEL_PRICING,
+  getModelTier,
+  resolveEffectivePricing,
+  computeTokenCost,
+  getBillingPeriodStart: getBillingPeriodStartPure,
+  extractProjectName: extractProjectNamePure,
+} = require('./pricing');
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -18,77 +27,8 @@ const CLAUDE_DATA_PATH =
   process.env.CLAUDE_DATA_PATH || path.join(os.homedir(), '.claude');
 const BILLING_DAY = parseInt(process.env.BILLING_DAY || '1', 10);
 
-// ── Model Pricing (USD per 1M tokens) ─────────────────────────────────────────
-// Prices as of 2025 — update these if Anthropic changes rates.
-const MODEL_PRICING = {
-  opus: {
-    displayName: 'Claude Opus',
-    color: '#a855f7',
-    input: 15.0,
-    output: 75.0,
-    cacheCreation: 18.75,
-    cacheRead: 1.5,
-  },
-  sonnet: {
-    displayName: 'Claude Sonnet',
-    color: '#6366f1',
-    input: 3.0,
-    output: 15.0,
-    cacheCreation: 3.75,
-    cacheRead: 0.3,
-  },
-  haiku: {
-    displayName: 'Claude Haiku',
-    color: '#22d3ee',
-    input: 0.8,
-    output: 4.0,
-    cacheCreation: 1.0,
-    cacheRead: 0.08,
-  },
-};
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function getModelTier(modelId) {
-  const id = (modelId || '').toLowerCase();
-  if (id.includes('opus')) return 'opus';
-  if (id.includes('haiku')) return 'haiku';
-  return 'sonnet';
-}
-
-/**
- * Merge client-supplied pricing overrides with server defaults.
- * Accepts either a full {opus,sonnet,haiku} object or null/undefined.
- */
-function resolveEffectivePricing(overrides) {
-  if (!overrides) return MODEL_PRICING;
-  const result = {};
-  for (const tier of ['opus', 'sonnet', 'haiku']) {
-    result[tier] = { ...MODEL_PRICING[tier], ...(overrides[tier] || {}) };
-  }
-  return result;
-}
-
-function computeTokenCost(tokens, modelId, pricing) {
-  const tier = getModelTier(modelId);
-  const p = (pricing || MODEL_PRICING)[tier];
-  const M = 1_000_000;
-  return (
-    ((tokens.inputTokens || 0) / M) * p.input +
-    ((tokens.outputTokens || 0) / M) * p.output +
-    ((tokens.cacheCreationInputTokens || 0) / M) * p.cacheCreation +
-    ((tokens.cacheReadInputTokens || 0) / M) * p.cacheRead
-  );
-}
-
 function getBillingPeriodStart(billingDay = BILLING_DAY) {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  const day = now.getDate();
-  if (day >= billingDay) {
-    return new Date(year, month, billingDay);
-  }
-  return new Date(year, month - 1, billingDay);
+  return getBillingPeriodStartPure(billingDay, new Date());
 }
 
 function readStatsCache() {
@@ -119,27 +59,16 @@ function findJsonlFiles(dir, depth = 0) {
   return files;
 }
 
-/**
- * Extract a human-readable project name from the file path.
- * ~/.claude/projects/-Users-jbull-WebstormProjects-foo/session.jsonl
- * → WebstormProjects/foo
- */
 function extractProjectName(filePath) {
-  const parts = filePath.split(path.sep);
-  const projectsIdx = parts.lastIndexOf('projects');
-  if (projectsIdx >= 0 && parts[projectsIdx + 1]) {
-    const slug = parts[projectsIdx + 1];
-    // Strip leading -Users-<name>- prefix
-    const cleaned = slug.replace(/^-[Uu]sers-[^-]+-/, '').replace(/-/g, '/');
-    return cleaned || slug;
-  }
-  return 'unknown';
+  return extractProjectNamePure(filePath, path.sep);
 }
 
 /**
  * Parse a single session JSONL file and aggregate token usage.
+ * When `collectMessages` is true, also return a per-message timeline
+ * (used by the drilldown view).
  */
-function parseSession(filePath) {
+function parseSession(filePath, { collectMessages = false } = {}) {
   const session = {
     sessionId: path.basename(filePath, '.jsonl'),
     filePath,
@@ -148,6 +77,8 @@ function parseSession(filePath) {
     timestamp: null,
     lastActivity: null,
     messageCount: 0,
+    userMessageCount: 0,
+    toolUseCount: 0,
     models: {},
     totalTokens: {
       inputTokens: 0,
@@ -156,6 +87,9 @@ function parseSession(filePath) {
       cacheCreationInputTokens: 0,
     },
     estimatedCost: 0,
+    cwd: null,
+    gitBranch: null,
+    messages: collectMessages ? [] : undefined,
   };
 
   try {
@@ -168,6 +102,29 @@ function parseSession(filePath) {
         if (entry.timestamp) {
           if (!session.timestamp) session.timestamp = entry.timestamp;
           session.lastActivity = entry.timestamp;
+        }
+        if (entry.cwd && !session.cwd) session.cwd = entry.cwd;
+        if (entry.gitBranch && !session.gitBranch) session.gitBranch = entry.gitBranch;
+
+        if (entry.type === 'user' && entry.message) {
+          session.userMessageCount++;
+          if (collectMessages) {
+            const content = entry.message.content;
+            let preview = '';
+            if (typeof content === 'string') preview = content;
+            else if (Array.isArray(content)) {
+              for (const block of content) {
+                if (block?.type === 'text' && block.text) preview = block.text;
+                else if (block?.type === 'tool_result' && typeof block.content === 'string')
+                  preview = '[tool_result] ' + block.content;
+              }
+            }
+            session.messages.push({
+              role: 'user',
+              timestamp: entry.timestamp || null,
+              preview: (preview || '').slice(0, 400),
+            });
+          }
         }
 
         if (entry.type === 'assistant' && entry.message?.usage) {
@@ -198,6 +155,28 @@ function parseSession(filePath) {
           session.totalTokens.outputTokens += ot;
           session.totalTokens.cacheReadInputTokens += cr;
           session.totalTokens.cacheCreationInputTokens += cc;
+
+          if (collectMessages) {
+            let preview = '';
+            let toolUses = 0;
+            const content = entry.message.content;
+            if (typeof content === 'string') preview = content;
+            else if (Array.isArray(content)) {
+              for (const block of content) {
+                if (block?.type === 'text' && block.text) preview = block.text;
+                if (block?.type === 'tool_use') toolUses++;
+              }
+            }
+            session.toolUseCount += toolUses;
+            session.messages.push({
+              role: 'assistant',
+              timestamp: entry.timestamp || null,
+              model,
+              tokens: { inputTokens: it, outputTokens: ot, cacheReadInputTokens: cr, cacheCreationInputTokens: cc },
+              toolUses,
+              preview: (preview || '').slice(0, 400),
+            });
+          }
         }
       } catch {}
     }
@@ -238,7 +217,7 @@ app.get('/api/usage', (req, res) => {
     const jsonlFiles = findJsonlFiles(projectsPath);
 
     const allSessions = jsonlFiles
-      .map(parseSession)
+      .map((f) => parseSession(f))
       .filter((s) => s.messageCount > 0)
       .sort(
         (a, b) =>
@@ -419,6 +398,7 @@ app.get('/api/usage', (req, res) => {
         a.month.localeCompare(b.month)
       ),
       sessions: allSessions.slice(0, 75),
+      activeSessions: buildActiveSessions(allSessions),
       modelPricing: effectivePricing,
     });
   } catch (err) {
@@ -426,6 +406,89 @@ app.get('/api/usage', (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+/**
+ * Get full details for a single session (used by the drilldown modal).
+ * The :id is the basename of the .jsonl file (e.g. "abc123").
+ */
+app.get('/api/sessions/:id', (req, res) => {
+  try {
+    let effectivePricing = MODEL_PRICING;
+    if (req.query.pricing) {
+      try {
+        effectivePricing = resolveEffectivePricing(JSON.parse(req.query.pricing));
+      } catch {}
+    }
+
+    const projectsPath = path.join(CLAUDE_DATA_PATH, 'projects');
+    const jsonlFiles = findJsonlFiles(projectsPath);
+    const target = jsonlFiles.find(
+      (f) => path.basename(f, '.jsonl') === req.params.id
+    );
+
+    if (!target) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const session = parseSession(target, { collectMessages: true });
+    // Recompute estimatedCost using effective pricing
+    session.estimatedCost = 0;
+    for (const [model, tokens] of Object.entries(session.models)) {
+      session.estimatedCost += computeTokenCost(tokens, model, effectivePricing);
+    }
+    res.json(session);
+  } catch (err) {
+    console.error('Error reading session:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Identify currently active (recently used) sessions.
+ *
+ * Claude Code / Claude.ai operate on a rolling ~5-hour usage window per the
+ * /settings/usage page. We can't read that page (auth required), so we
+ * approximate: any session with activity in the last 5 hours is "active",
+ * and the window ends 5h after its first message in this window.
+ *
+ * If you'd like a different window length, set CLAUDE_USAGE_WINDOW_HOURS.
+ */
+function buildActiveSessions(allSessions) {
+  const windowHours = parseFloat(process.env.CLAUDE_USAGE_WINDOW_HOURS || '5');
+  const windowMs = windowHours * 60 * 60 * 1000;
+  const now = Date.now();
+
+  const active = [];
+  for (const s of allSessions) {
+    if (!s.lastActivity) continue;
+    const last = new Date(s.lastActivity).getTime();
+    if (now - last <= windowMs) {
+      const first = s.timestamp
+        ? new Date(s.timestamp).getTime()
+        : last;
+      // Window started at the first message; expires windowMs after that
+      const windowEnd = first + windowMs;
+      const remainingMs = Math.max(0, windowEnd - now);
+      active.push({
+        sessionId: s.sessionId,
+        project: s.project,
+        firstActivity: s.timestamp,
+        lastActivity: s.lastActivity,
+        minutesSinceLastActivity: Math.floor((now - last) / 60000),
+        estimatedCost: s.estimatedCost,
+        totalTokens: s.totalTokens,
+        messageCount: s.messageCount,
+        windowEndsAt: new Date(windowEnd).toISOString(),
+        windowRemainingMs: remainingMs,
+        windowElapsedMs: Math.max(0, now - first),
+        windowHours,
+      });
+    }
+  }
+  // Sort: most recently active first
+  active.sort((a, b) => a.minutesSinceLastActivity - b.minutesSinceLastActivity);
+  return active;
+}
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 const PORT = process.env.SERVER_PORT || 3001;

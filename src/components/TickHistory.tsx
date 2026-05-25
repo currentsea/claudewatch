@@ -65,7 +65,7 @@ export function TickHistory({ ticks, intervalMs, onClear }: Props) {
   const avgPerTick = ticks.length > 0 ? totalDeltaCost / ticks.length : 0;
 
   return (
-    <div className="rounded-2xl border border-slate-700/60 bg-slate-800/30 p-5">
+    <div className="rounded-2xl border border-slate-700/60 bg-black/10 p-5">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>

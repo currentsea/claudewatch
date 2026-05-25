@@ -461,8 +461,17 @@ export function PricingSettingsPanel({ settings, onChange }: Props) {
         </div>
 
         <p className="text-xs text-slate-600">
-          Prices verified May 2025. If Anthropic updates rates, edit the fields
-          above — changes persist in your browser's local storage.
+          Defaults verified May 2026 against{' '}
+          <a
+            href="https://docs.anthropic.com/en/docs/about-claude/pricing"
+            target="_blank"
+            rel="noreferrer"
+            className="underline hover:text-slate-400"
+          >
+            docs.anthropic.com/en/docs/about-claude/pricing
+          </a>
+          . If Anthropic updates rates, edit the fields above — changes persist
+          in your browser's local storage.
         </p>
       </div>
     </div>
