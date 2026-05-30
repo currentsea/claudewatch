@@ -163,6 +163,7 @@ describe('anthropicPnL', () => {
     expect(result).toEqual({
       revenue: 20,
       cost: 5,
+      designCost: 0,
       profit: 15,
       months: 1,
     });
@@ -196,6 +197,15 @@ describe('anthropicPnL', () => {
   it('handles zero api cost', () => {
     const result = anthropicPnL(20, 0, may1());
     expect(result.profit).toBe(20);
+  });
+
+  it('subtracts the Claude Design delivery cost per active month', () => {
+    // 6 months active, $5/mo design cost = $30 design cost
+    const result = anthropicPnL(20, 50, dec1_2025(), 5);
+    expect(result.months).toBe(6);
+    expect(result.designCost).toBe(30);
+    // profit = 120 revenue − 50 compute − 30 design
+    expect(result.profit).toBe(40);
   });
 });
 

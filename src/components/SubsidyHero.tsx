@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Flame, TrendingUp, TrendingDown, ServerCrash, Info, X } from 'lucide-react';
+import { Flame, TrendingUp, TrendingDown, Info, X } from 'lucide-react';
 import { SubscriptionTier } from '../types';
 import { anthropicPnL, formatCost } from '../utils/pricing';
 
@@ -13,24 +13,39 @@ interface Props {
 }
 
 /**
- * Formats a date range for the current billing period.
- * e.g. "May 1 – May 25, 2026"
+ * Click-to-open explainer that shows the math behind the headline
+ * "+/− $X for Anthropic" figure.
  */
-function formatPeriodRange(periodStart: string): string {
-  const start = new Date(periodStart);
-  const now = new Date();
-  return `${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
-}
-
-/**
- * Small info tooltip that shows on hover/click.
- */
-function SubsidyTooltip({ show, onClose }: { show: boolean; onClose: () => void }) {
+function PnlExplainer({
+  show,
+  onClose,
+  subscriptionCost,
+  revenue,
+  cost,
+  profit,
+  months,
+  subsidising,
+}: {
+  show: boolean;
+  onClose: () => void;
+  subscriptionCost: number;
+  totalApiCost: number;
+  revenue: number;
+  cost: number;
+  profit: number;
+  months: number;
+  subsidising: boolean;
+}) {
   if (!show) return null;
   return (
-    <div className="absolute bottom-full left-0 z-50 mb-2 w-72 rounded-xl border border-slate-700/60 bg-slate-900 p-4 text-xs text-slate-400 shadow-xl">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="font-semibold text-slate-200">How "This-period subsidy" is calculated</span>
+    <div
+      className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-slate-700/60 bg-slate-900 p-4 text-xs text-slate-400 shadow-2xl"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="mb-3 flex items-center justify-between">
+        <span className="font-semibold text-slate-200">
+          How "{subsidising ? '−' : '+'}{formatCost(Math.abs(profit))} for Anthropic" is calculated
+        </span>
         <button onClick={onClose} className="text-slate-600 hover:text-slate-300">
           <X size={12} />
         </button>
@@ -38,38 +53,89 @@ function SubsidyTooltip({ show, onClose }: { show: boolean; onClose: () => void 
 
       <div className="space-y-2">
         <p>
-          <span className="font-medium text-slate-300">This-period API cost</span>{' '}
-          is computed by reading every assistant message in your{' '}
-          <code className="rounded bg-slate-800/60 px-1">~/.claude/projects</code>{' '}
-          JSONL files that falls within the current billing period.
+          From Anthropic's perspective, profit = the money you paid them minus
+          the money it cost them to serve your usage.
         </p>
-        <p>
-          Each message's token counts (input, output, cache write, cache read)
-          are multiplied by the corresponding per-token rate from{' '}
-          <a
-            href="https://www.anthropic.com/pricing"
-            target="_blank"
-            rel="noreferrer"
-            className="text-blue-400 underline hover:text-blue-300"
-          >
-            anthropic.com/pricing
-          </a>
-          {' '}and summed across all models.
-        </p>
+
+        <ol className="ml-4 list-decimal space-y-1 text-slate-400">
+          <li>
+            <span className="font-medium text-slate-300">Revenue</span>: your
+            monthly fee × months active.
+          </li>
+          <li>
+            <span className="font-medium text-slate-300">Compute cost</span>:
+            every token in your{' '}
+            <code className="rounded bg-slate-800/60 px-1">~/.claude</code>{' '}
+            sessions priced at Anthropic's published API list rates (their
+            internal compute cost is lower than list — list is the public
+            upper bound).
+          </li>
+          <li>
+            <span className="font-medium text-slate-300">Profit</span>: revenue
+            − compute cost.
+          </li>
+        </ol>
+
         <div className="rounded-lg border border-slate-700/40 bg-black/30 p-2 font-mono text-[10px] leading-5">
-          <div><span className="text-yellow-400">API cost</span> = Σ(tokens × rate / 1M)</div>
-          <div className="mt-1"><span className="text-red-400">Subsidy</span> = max(0, API cost − subscription)</div>
+          <div>
+            <span className="text-emerald-400">revenue</span> ={' '}
+            ${subscriptionCost.toFixed(2)}/mo × {months} mo ={' '}
+            <span className="text-emerald-400">{formatCost(revenue)}</span>
+          </div>
+          <div>
+            <span className="text-amber-400">cost</span> = Σ(tokens × rate ÷ 1M) ={' '}
+            <span className="text-amber-400">{formatCost(cost)}</span>
+          </div>
+          <div className="mt-1 border-t border-slate-700/40 pt-1">
+            <span className={subsidising ? 'text-red-400' : 'text-emerald-400'}>
+              profit
+            </span>
+            {' '}= {formatCost(revenue)} − {formatCost(cost)} ={' '}
+            <span className={subsidising ? 'text-red-400' : 'text-emerald-400'}>
+              {profit >= 0 ? '+' : '−'}{formatCost(Math.abs(profit))}
+            </span>
+          </div>
         </div>
+
+        <p>
+          <strong className="text-slate-300">
+            {subsidising ? 'Negative' : 'Positive'}
+          </strong>{' '}
+          {subsidising
+            ? 'means Anthropic is currently eating compute cost beyond what you have paid them. Common for heavy Opus users on Pro/Max plans.'
+            : 'means Anthropic has collected more from you in subscription fees than it has spent in (list-price-equivalent) compute. Their actual margin is even larger.'}
+        </p>
+
         <p className="text-slate-500">
-          Source:{' '}
+          Period: <strong className="text-slate-400">all-time</strong> since
+          your first recorded session — per-month splits are intentionally omitted
+          because they're too noisy to be useful.
+        </p>
+
+        <p className="text-slate-500">
+          Sources:{' '}
           <a
             href="https://docs.anthropic.com/en/docs/about-claude/pricing"
             target="_blank"
             rel="noreferrer"
             className="underline hover:text-slate-300"
           >
-            docs.anthropic.com/en/docs/about-claude/pricing
+            anthropic API pricing docs
           </a>
+          {' · '}
+          <a
+            href="https://claude.ai/upgrade"
+            target="_blank"
+            rel="noreferrer"
+            className="underline hover:text-slate-300"
+          >
+            claude.ai plans
+          </a>
+        </p>
+        <p className="text-slate-600 text-[10px]">
+          Note: list price is a proxy for Anthropic's true compute cost (their
+          actual unit economics are lower). ClaudeWatch cannot read Anthropic's
+          internal infra costs, so we use the public-facing rate.
         </p>
       </div>
     </div>
@@ -81,16 +147,17 @@ function SubsidyTooltip({ show, onClose }: { show: boolean; onClose: () => void 
  *
  * Answers: "Of what it actually costs Anthropic to serve me,
  * how much am I paying for vs. how much are they eating?"
+ *
+ * Only reports all-time figures — per-billing-period subsidy was removed
+ * because the math is too noisy month-to-month to be trustworthy.
  */
 export function SubsidyHero({
   subscriptionCost,
   totalApiCost,
-  currentPeriodCost,
   firstSessionDate,
   subscriptionLabel,
-  billingPeriodStart,
 }: Props) {
-  const [showTooltip, setShowTooltip] = useState(false);
+  const [showPnlExplainer, setShowPnlExplainer] = useState(false);
 
   const { revenue, cost, profit, months } = anthropicPnL(
     subscriptionCost,
@@ -98,26 +165,16 @@ export function SubsidyHero({
     firstSessionDate
   );
 
-  // Subsidy = extra compute Anthropic ate beyond what you paid.
   const subsidy = Math.max(0, cost - revenue);
   const surplus = Math.max(0, revenue - cost);
   const youArePaying = Math.min(revenue, cost);
 
-  // Bar segments (normalised to the larger of cost vs revenue)
   const denominator = Math.max(cost, revenue, 0.01);
   const paidPct = (youArePaying / denominator) * 100;
   const subsidyPct = (subsidy / denominator) * 100;
   const surplusPct = (surplus / denominator) * 100;
 
-  // Period-level numbers
-  const periodSubsidy = Math.max(0, currentPeriodCost - subscriptionCost);
-
   const subsidising = profit < 0;
-
-  // Period label
-  const periodRange = billingPeriodStart
-    ? formatPeriodRange(billingPeriodStart)
-    : `${months} month${months !== 1 ? 's' : ''}`;
 
   return (
     <div className="relative overflow-hidden rounded-2xl border border-slate-700/60 bg-black/10 p-6 backdrop-blur-sm">
@@ -161,22 +218,39 @@ export function SubsidyHero({
           </p>
         </div>
 
-        <div className="flex shrink-0 flex-col items-end gap-1.5">
-          <div
-            className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold ${
+        <div className="relative flex shrink-0 flex-col items-end gap-1.5">
+          <button
+            type="button"
+            onClick={() => setShowPnlExplainer((v) => !v)}
+            aria-label="Show how this profit/loss figure is calculated"
+            data-testid="pnl-badge-explainer"
+            className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 ${
               subsidising
-                ? 'border-red-500/30 bg-red-500/10 text-red-300'
-                : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                ? 'border-red-500/30 bg-red-500/10 text-red-300 hover:bg-red-500/15 focus:ring-red-400/50'
+                : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15 focus:ring-emerald-400/50'
             }`}
           >
             {subsidising ? <TrendingDown size={16} /> : <TrendingUp size={16} />}
             {subsidising
               ? `−${formatCost(Math.abs(profit))} for Anthropic`
               : `+${formatCost(profit)} for Anthropic`}
-          </div>
+            <Info size={11} className="opacity-60" />
+          </button>
           <p className="text-[10px] text-slate-600">
-            All-time · {months} month{months !== 1 ? 's' : ''}
+            All-time · {months} month{months !== 1 ? 's' : ''} · click for math
           </p>
+
+          <PnlExplainer
+            show={showPnlExplainer}
+            onClose={() => setShowPnlExplainer(false)}
+            subscriptionCost={subscriptionCost}
+            totalApiCost={totalApiCost}
+            revenue={revenue}
+            cost={cost}
+            profit={profit}
+            months={months}
+            subsidising={subsidising}
+          />
         </div>
       </div>
 
@@ -188,14 +262,12 @@ export function SubsidyHero({
         </div>
 
         <div className="relative h-10 w-full overflow-hidden rounded-lg bg-slate-900/60 ring-1 ring-slate-700/40">
-          {/* What you paid for */}
           <div
             className="absolute left-0 top-0 flex h-full items-center justify-end overflow-hidden bg-gradient-to-r from-emerald-500/70 to-emerald-400/70 pr-2 text-xs font-semibold text-white"
             style={{ width: `${paidPct}%` }}
           >
             {paidPct > 18 ? `You paid ${formatCost(youArePaying)}` : ''}
           </div>
-          {/* Subsidy (Anthropic eats) */}
           {subsidyPct > 0 && (
             <div
               className="absolute top-0 flex h-full items-center justify-center overflow-hidden border-l border-red-300/40 bg-gradient-to-r from-red-500/70 to-red-600/70 px-2 text-xs font-semibold text-white"
@@ -204,7 +276,6 @@ export function SubsidyHero({
               {subsidyPct > 14 ? `Anthropic ate ${formatCost(subsidy)}` : ''}
             </div>
           )}
-          {/* Surplus (Anthropic keeps) */}
           {surplusPct > 0 && (
             <div
               className="absolute top-0 flex h-full items-center justify-center overflow-hidden border-l border-emerald-300/40 bg-gradient-to-r from-emerald-400/40 to-emerald-300/40 px-2 text-xs font-semibold text-emerald-100"
@@ -215,7 +286,6 @@ export function SubsidyHero({
           )}
         </div>
 
-        {/* Legend */}
         <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-slate-400">
           <span className="flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded bg-emerald-500" />
@@ -233,89 +303,6 @@ export function SubsidyHero({
               Anthropic kept
             </span>
           )}
-        </div>
-      </div>
-
-      {/* ── Period strip ───────────────────────────────────────────────────── */}
-      <div className="relative mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {/* This billing period */}
-        <div className="rounded-xl border border-slate-700/40 bg-black/10 p-3">
-          <p className="text-xs text-slate-500">This billing period</p>
-          <p className="text-[10px] text-slate-600 font-mono mt-0.5">{periodRange}</p>
-          <p
-            className={`mt-1 text-lg font-bold ${
-              currentPeriodCost > subscriptionCost
-                ? 'text-red-300'
-                : 'text-emerald-300'
-            }`}
-          >
-            {formatCost(currentPeriodCost)} API equiv.
-          </p>
-          <p className="text-xs text-slate-500">
-            vs {formatCost(subscriptionCost)} you paid this month
-          </p>
-        </div>
-
-        {/* This-period subsidy — with tooltip */}
-        <div className="relative rounded-xl border border-slate-700/40 bg-black/10 p-3">
-          <p className="flex items-center gap-1.5 text-xs text-slate-500">
-            <ServerCrash size={11} className="text-red-400" />
-            This-period subsidy
-            <button
-              type="button"
-              onClick={() => setShowTooltip((v) => !v)}
-              className="ml-auto rounded-full p-0.5 text-slate-600 hover:text-slate-300 transition-colors focus:outline-none focus:ring-1 focus:ring-slate-500"
-              aria-label="How is this-period subsidy calculated?"
-            >
-              <Info size={11} />
-            </button>
-          </p>
-
-          <SubsidyTooltip
-            show={showTooltip}
-            onClose={() => setShowTooltip(false)}
-          />
-
-          <p className="mt-0.5 text-lg font-bold text-red-300">
-            {periodSubsidy > 0 ? `−${formatCost(periodSubsidy)}` : '$0.00'}
-          </p>
-          <p className="text-xs text-slate-500">
-            {periodSubsidy > 0
-              ? 'Anthropic eating this month'
-              : 'No subsidy needed this month'}
-          </p>
-        </div>
-
-        {/* API-rate comparison pane */}
-        <div className="rounded-xl border border-slate-700/40 bg-black/10 p-3">
-          <p className="text-xs text-slate-500">
-            If you paid pure API rates…
-          </p>
-          <p
-            className={`mt-0.5 text-lg font-bold ${
-              currentPeriodCost > subscriptionCost
-                ? 'text-emerald-300'
-                : 'text-amber-300'
-            }`}
-          >
-            {currentPeriodCost > subscriptionCost
-              ? `+${formatCost(currentPeriodCost - subscriptionCost)} saved`
-              : `−${formatCost(subscriptionCost - currentPeriodCost)} more`}
-          </p>
-          <p className="text-xs text-slate-500">
-            {currentPeriodCost > subscriptionCost
-              ? 'API would have cost more — subscription wins 🎉'
-              : 'API would have been cheaper this period'}
-          </p>
-          <div className={`mt-2 rounded-md border px-2 py-1 text-xs ${
-            currentPeriodCost > subscriptionCost
-              ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
-              : 'border-amber-500/30 bg-amber-500/10 text-amber-400'
-          }`}>
-            {currentPeriodCost > subscriptionCost
-              ? '📈 Anthropic would lose money at API rates too'
-              : '📊 Anthropic profits even at API rates'}
-          </div>
         </div>
       </div>
     </div>

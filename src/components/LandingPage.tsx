@@ -83,7 +83,7 @@ export function LandingPage() {
           </div>
         </div>
         <h1 className="mb-4 text-4xl font-extrabold tracking-tight text-white">
-          BurnItDown
+          ClaudeWatch
         </h1>
         <p className="mx-auto mb-2 max-w-xl text-lg text-slate-400 leading-relaxed">
           The open-source Claude usage analytics dashboard that answers one question:
@@ -113,9 +113,9 @@ export function LandingPage() {
 
       {/* What is it? */}
       <div className="mb-10 rounded-2xl border border-slate-700/60 bg-black/10 p-6 backdrop-blur-sm">
-        <h2 className="mb-3 text-base font-bold text-white">What is BurnItDown?</h2>
+        <h2 className="mb-3 text-base font-bold text-white">What is ClaudeWatch?</h2>
         <p className="mb-4 text-sm text-slate-400 leading-relaxed">
-          BurnItDown reads your local Claude session files (from{' '}
+          ClaudeWatch reads your local Claude session files (from{' '}
           <code className="rounded bg-slate-800/60 px-1.5 text-slate-300">~/.claude/projects</code>),
           calculates what your usage <em>would have cost</em> at Anthropic's published API rates,
           and compares that to your flat-rate subscription. You can instantly see whether
@@ -242,7 +242,7 @@ export function LandingPage() {
             <Step
               number={1}
               title="Clone the repository"
-              description="Open your terminal and clone BurnItDown from GitHub."
+              description="Open your terminal and clone ClaudeWatch from GitHub."
               code="git clone https://github.com/currentsea/claudewatch.git && cd claudewatch"
             />
             <Step
@@ -275,7 +275,7 @@ export function LandingPage() {
 
         <div className="mt-4 rounded-2xl border border-slate-700/60 bg-black/10 p-5 backdrop-blur-sm">
           <p className="mb-4 text-sm text-slate-400">
-            BurnItDown works out of the box with zero configuration. Optional environment
+            ClaudeWatch works out of the box with zero configuration. Optional environment
             variables let you customise behaviour:
           </p>
           <div className="overflow-x-auto rounded-xl border border-slate-700/40 bg-black/20">
@@ -326,7 +326,7 @@ export function LandingPage() {
           <h2 className="text-sm font-bold text-emerald-400">100% Private by Design</h2>
         </div>
         <p className="text-sm text-slate-400 leading-relaxed">
-          BurnItDown reads only the JSONL files in your{' '}
+          ClaudeWatch reads only the JSONL files in your{' '}
           <code className="rounded bg-slate-800/60 px-1 text-slate-300">~/.claude/projects</code>{' '}
           directory. These files exist on your machine because Claude Code writes them locally.
           No data is ever transmitted to any external server. The backend runs entirely on

@@ -141,8 +141,8 @@ export function SessionsTable({ sessions, subscriptionCost, onSelectSession }: P
       sortDir === 'desc' ? <ChevronDown size={12} /> : <ChevronUp size={12} />
     ) : null;
 
-  // Summary values
-  const anthropicNetAllTime = subscriptionCost - totalSessionApiCost;
+  // Whether the subscriber comes out ahead on the visible sessions
+  const subscriberAheadOnVisible = totalSessionApiCost >= subscriptionCost;
 
   return (
     <div className="rounded-2xl border border-slate-700/60 bg-black/10 backdrop-blur-sm overflow-hidden">
@@ -157,17 +157,18 @@ export function SessionsTable({ sessions, subscriptionCost, onSelectSession }: P
             estimated compute expense per session
           </p>
         </div>
-        {/* Period summary badge */}
+        {/* Visible-sessions summary badge — uses subscriber framing only */}
         <div
           className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-medium border ${
-            anthropicNetAllTime >= 0
+            subscriberAheadOnVisible
               ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-              : 'bg-red-500/10 border-red-500/20 text-red-400'
+              : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
           }`}
         >
-          {anthropicNetAllTime >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-          Anthropic {anthropicNetAllTime >= 0 ? 'gains' : 'loses'}{' '}
-          {formatCost(Math.abs(anthropicNetAllTime))} on you this period
+          {subscriberAheadOnVisible ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+          {subscriberAheadOnVisible
+            ? `Subscription ahead by ${formatCost(totalSessionApiCost - subscriptionCost)}`
+            : `Sub would save ${formatCost(subscriptionCost - totalSessionApiCost)} less than API`}
         </div>
       </div>
 
@@ -388,12 +389,12 @@ export function SessionsTable({ sessions, subscriptionCost, onSelectSession }: P
           </span>
           <span
             className={`font-semibold ${
-              anthropicNetAllTime >= 0 ? 'text-emerald-400' : 'text-red-400'
+              subscriberAheadOnVisible ? 'text-emerald-400' : 'text-amber-400'
             }`}
           >
-            Anthropic net:{' '}
-            {anthropicNetAllTime >= 0 ? '+' : '−'}
-            {formatCost(Math.abs(anthropicNetAllTime))}
+            Net vs sub:{' '}
+            {subscriberAheadOnVisible ? '+' : '−'}
+            {formatCost(Math.abs(totalSessionApiCost - subscriptionCost))}
           </span>
         </div>
 

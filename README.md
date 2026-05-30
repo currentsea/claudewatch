@@ -181,7 +181,7 @@ Copy `.env.example` to `.env` and override any of the following.
 |---|---|---|
 | `CLAUDE_DATA_PATH` | `~/.claude` | Absolute path to your Claude Code data directory. Only change if you moved it. |
 | `SERVER_PORT` | `3001` | TCP port for the Express API server. If you change this, also update the `proxy` field in `package.json`. |
-| `BILLING_DAY` | `1` | Day-of-month when your Anthropic subscription renews. E.g. `15` if you subscribed on the 15th. |
+| `BILLING_DAY` | `30` | Day-of-month when your Anthropic subscription renews. E.g. `15` if you subscribed on the 15th. |
 | `CLAUDE_USAGE_WINDOW_HOURS` | `5` | Length of Claude's rolling usage window. Used to compute "active sessions" remaining time. |
 
 ### Frontend variables (REACT_APP_* are baked in at build time)

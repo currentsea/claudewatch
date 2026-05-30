@@ -194,9 +194,9 @@ export function DonatePage() {
             <Heart size={32} className="text-white" />
           </div>
         </div>
-        <h1 className="mb-3 text-3xl font-bold text-white">Support BurnItDown</h1>
+        <h1 className="mb-3 text-3xl font-bold text-white">Support ClaudeWatch</h1>
         <p className="mx-auto max-w-xl text-base text-slate-400 leading-relaxed">
-          BurnItDown is a free, open-source tool built and maintained by{' '}
+          ClaudeWatch is a free, open-source tool built and maintained by{' '}
           <a
             href="https://github.com/currentsea"
             target="_blank"
@@ -232,8 +232,8 @@ export function DonatePage() {
         <p className="mb-2 text-sm font-semibold text-white">Thank You 🙏</p>
         <p className="text-sm text-slate-400 leading-relaxed">
           Your donation directly supports open-source development, server costs, and the
-          time invested in making BurnItDown the best Claude usage analytics tool
-          available. BurnItDown is and will always remain free to use.
+          time invested in making ClaudeWatch the best Claude usage analytics tool
+          available. ClaudeWatch is and will always remain free to use.
         </p>
         <div className="mt-4 flex justify-center gap-4">
           <a

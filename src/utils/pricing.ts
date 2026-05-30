@@ -3,7 +3,8 @@ import { PricingSettings, SubscriptionTier } from '../types';
 // ── Default pricing constants ─────────────────────────────────────────────────
 
 // Defaults reflect current Anthropic API pricing as of May 2026.
-// Opus 4.5/4.6/4.7 dropped to $5/$25 per MTok (from $15/$75 on Opus 4.1).
+// Latest models: Opus 4.8 (most capable), Sonnet 4.6 (balanced), Haiku 4.5 (fastest).
+// Opus 4.5–4.8 are $5/$25 per MTok (down from $15/$75 on Opus 4.1).
 // Sonnet 4.5/4.6 stay at $3/$15. Haiku 4.5 is $1/$5 (Haiku 3.5 was $0.80/$4).
 // Source: https://docs.anthropic.com/en/docs/about-claude/pricing
 export const DEFAULT_PRICING_SETTINGS: PricingSettings = {
@@ -13,13 +14,28 @@ export const DEFAULT_PRICING_SETTINGS: PricingSettings = {
     haiku: { input: 1.0, output: 5.0, cacheCreation: 1.25, cacheRead: 0.1 },
   },
   subscriptionTiers: { pro: 20, max5x: 100, max20x: 200 },
+  // Estimated monthly cost (USD) for Anthropic to deliver the Claude Design
+  // feature. Illustrative default — editable in Pricing Settings.
+  claudeDesignMonthlyCost: 5,
 };
 
-export const STORAGE_KEY = 'burnitdown-pricing-settings';
+export const STORAGE_KEY = 'claudewatch-pricing-settings';
+const LEGACY_STORAGE_KEY = 'burnitdown-pricing-settings';
 
 export function loadPricingSettings(): PricingSettings {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    let raw = localStorage.getItem(STORAGE_KEY);
+    // One-time migration from legacy key
+    if (!raw) {
+      const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (legacy) {
+        raw = legacy;
+        try {
+          localStorage.setItem(STORAGE_KEY, legacy);
+          localStorage.removeItem(LEGACY_STORAGE_KEY);
+        } catch {}
+      }
+    }
     if (!raw) return DEFAULT_PRICING_SETTINGS;
     const parsed = JSON.parse(raw) as PricingSettings;
     // Deep-merge with defaults so new fields always exist
@@ -30,6 +46,8 @@ export function loadPricingSettings(): PricingSettings {
         haiku: { ...DEFAULT_PRICING_SETTINGS.modelPricing.haiku, ...parsed.modelPricing?.haiku },
       },
       subscriptionTiers: { ...DEFAULT_PRICING_SETTINGS.subscriptionTiers, ...parsed.subscriptionTiers },
+      claudeDesignMonthlyCost:
+        parsed.claudeDesignMonthlyCost ?? DEFAULT_PRICING_SETTINGS.claudeDesignMonthlyCost,
     };
   } catch {
     return DEFAULT_PRICING_SETTINGS;
@@ -136,19 +154,30 @@ export function monthsActive(firstSessionDate: string | null): number {
 
 /**
  * From Anthropic's perspective:
- *   revenue  = subscriptionCost × monthsActive
- *   cost     = totalApiCost (approximate compute cost to serve you)
- *   profit   = revenue − cost   (positive = Anthropic gains, negative = Anthropic loses)
+ *   revenue     = subscriptionCost × monthsActive
+ *   cost        = totalApiCost (approximate compute cost to serve you)
+ *   designCost  = claudeDesignMonthlyCost × monthsActive (cost to deliver the
+ *                 Claude Design feature, tracked as its own line item)
+ *   profit      = revenue − cost − designCost
+ *                 (positive = Anthropic gains, negative = Anthropic loses)
  */
 export function anthropicPnL(
   subscriptionCost: SubscriptionTier,
   totalApiCost: number,
-  firstSessionDate: string | null
-): { revenue: number; cost: number; profit: number; months: number } {
+  firstSessionDate: string | null,
+  claudeDesignMonthlyCost = 0
+): {
+  revenue: number;
+  cost: number;
+  designCost: number;
+  profit: number;
+  months: number;
+} {
   const months = monthsActive(firstSessionDate);
   const revenue = subscriptionCost * months;
   const cost = totalApiCost;
-  return { revenue, cost, profit: revenue - cost, months };
+  const designCost = claudeDesignMonthlyCost * months;
+  return { revenue, cost, designCost, profit: revenue - cost - designCost, months };
 }
 
 export type CustomerRating = {
@@ -215,4 +244,51 @@ export function getCustomerRating(profitMargin: number): CustomerRating {
     bgColor: 'bg-fuchsia-500/10',
     borderColor: 'border-fuchsia-500/30',
   };
+}
+
+// ── Time range helpers (for dashboard P&L period selector) ────────────────────
+
+export type TimeRangePreset = 'thisMonth' | 'last7' | 'last30' | 'last90' | 'allTime' | 'custom';
+
+export interface TimeRange {
+  preset: TimeRangePreset;
+  /** ISO start date (inclusive). Null = open-ended (all time). */
+  startISO: string | null;
+  /** ISO end date (inclusive). Null = now. */
+  endISO: string | null;
+  label: string;
+}
+
+export function buildTimeRange(preset: TimeRangePreset, custom?: { startISO: string; endISO: string }): TimeRange {
+  const now = new Date();
+  if (preset === 'thisMonth') {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    return {
+      preset,
+      startISO: start.toISOString(),
+      endISO: now.toISOString(),
+      label: now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+    };
+  }
+  if (preset === 'last7') {
+    const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    return { preset, startISO: start.toISOString(), endISO: now.toISOString(), label: 'Last 7 days' };
+  }
+  if (preset === 'last30') {
+    const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    return { preset, startISO: start.toISOString(), endISO: now.toISOString(), label: 'Last 30 days' };
+  }
+  if (preset === 'last90') {
+    const start = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+    return { preset, startISO: start.toISOString(), endISO: now.toISOString(), label: 'Last 90 days' };
+  }
+  if (preset === 'custom' && custom) {
+    return {
+      preset,
+      startISO: custom.startISO,
+      endISO: custom.endISO,
+      label: `${new Date(custom.startISO).toLocaleDateString()} – ${new Date(custom.endISO).toLocaleDateString()}`,
+    };
+  }
+  return { preset: 'allTime', startISO: null, endISO: null, label: 'All time' };
 }

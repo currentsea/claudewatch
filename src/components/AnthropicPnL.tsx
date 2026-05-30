@@ -1,88 +1,42 @@
 import React from 'react';
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ReferenceLine,
-  Cell,
-} from 'recharts';
 import { TrendingDown, TrendingUp, DollarSign } from 'lucide-react';
 import { SubscriptionTier } from '../types';
 import {
   anthropicPnL,
   getCustomerRating,
   formatCost,
-  formatMonthLabel,
 } from '../utils/pricing';
-import { MonthlyRollup } from '../types';
 
 interface Props {
   subscriptionCost: SubscriptionTier;
   totalApiCost: number;
-  currentPeriodCost: number;
   firstSessionDate: string | null;
-  monthlyRollup: MonthlyRollup[];
+  /** Estimated monthly cost (USD) for Anthropic to deliver the Claude Design feature. */
+  claudeDesignMonthlyCost?: number;
 }
 
-const CustomTooltip = ({ active, payload, label, subCost }: any) => {
-  if (!active || !payload?.length) return null;
-  const apiCost = payload[0]?.value ?? 0;
-  const profit = subCost - apiCost;
-  return (
-    <div className="rounded-xl border border-slate-700 bg-slate-900 p-3 text-sm shadow-xl">
-      <p className="mb-2 font-semibold text-slate-200">{label}</p>
-      <p className="text-slate-400">
-        Your API usage cost:{' '}
-        <span className="text-white">{formatCost(apiCost)}</span>
-      </p>
-      <p className="text-slate-400">
-        Sub revenue:{' '}
-        <span className="text-white">{formatCost(subCost)}</span>
-      </p>
-      <p
-        className={`mt-1 font-semibold ${
-          profit >= 0 ? 'text-emerald-400' : 'text-red-400'
-        }`}
-      >
-        Anthropic {profit >= 0 ? 'gains' : 'loses'}{' '}
-        {formatCost(Math.abs(profit))}
-      </p>
-    </div>
-  );
-};
-
+/**
+ * Anthropic-side P&L panel. Shows only the all-time figure — per-month
+ * estimates are too noisy to report meaningfully (compute prices change,
+ * billing-period boundaries vary), so we removed them.
+ */
 export function AnthropicPnL({
   subscriptionCost,
   totalApiCost,
-  currentPeriodCost,
   firstSessionDate,
-  monthlyRollup,
+  claudeDesignMonthlyCost = 0,
 }: Props) {
-  const { revenue, cost, profit, months } = anthropicPnL(
+  const { revenue, cost, designCost, profit, months } = anthropicPnL(
     subscriptionCost,
     totalApiCost,
-    firstSessionDate
+    firstSessionDate,
+    claudeDesignMonthlyCost
   );
+  const hasDesignCost = designCost > 0;
 
-  // profit margin from Anthropic's side: (revenue - cost) / revenue
   const profitMargin = revenue > 0 ? profit / revenue : 0;
   const rating = getCustomerRating(profitMargin);
 
-  // Current period
-  const periodProfit = subscriptionCost - currentPeriodCost;
-
-  // Chart: per-month API cost vs flat subscription
-  const chartData = monthlyRollup.map((m) => ({
-    label: formatMonthLabel(m.month),
-    apiCost: parseFloat(m.apiCost.toFixed(2)),
-    profit: parseFloat((subscriptionCost - m.apiCost).toFixed(2)),
-  }));
-
-  const isLosingThisPeriod = periodProfit < 0;
   const isLosingAllTime = profit < 0;
 
   return (
@@ -91,7 +45,7 @@ export function AnthropicPnL({
       <div className="flex items-start justify-between">
         <div>
           <h3 className="text-sm font-semibold text-white">
-            Anthropic's P&amp;L on You
+            Anthropic's All-Time P&amp;L on You
           </h3>
           <p className="text-xs text-slate-500">
             Sub revenue vs estimated compute cost over {months} month
@@ -124,98 +78,29 @@ export function AnthropicPnL({
         </div>
       </div>
 
-      {/* ── Two big numbers ─────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3">
-        {/* All-time */}
-        <div className="rounded-xl bg-slate-700/40 p-4">
-          <p className="mb-1 text-xs text-slate-500">All-time net</p>
-          <p
-            className={`text-xl font-bold ${
-              isLosingAllTime ? 'text-red-400' : 'text-emerald-400'
-            }`}
-          >
-            {isLosingAllTime ? '−' : '+'}
-            {formatCost(Math.abs(profit))}
-          </p>
-          <p className="mt-1 text-xs text-slate-500">
-            {formatCost(revenue)} revenue
-            <br />
-            {formatCost(cost)} in compute
-          </p>
-        </div>
-
-        {/* This period */}
-        <div className="rounded-xl bg-slate-700/40 p-4">
-          <p className="mb-1 text-xs text-slate-500">This period net</p>
-          <p
-            className={`text-xl font-bold ${
-              isLosingThisPeriod ? 'text-red-400' : 'text-emerald-400'
-            }`}
-          >
-            {isLosingThisPeriod ? '−' : '+'}
-            {formatCost(Math.abs(periodProfit))}
-          </p>
-          <p className="mt-1 text-xs text-slate-500">
-            {formatCost(subscriptionCost)} revenue
-            <br />
-            {formatCost(currentPeriodCost)} in compute
-          </p>
-        </div>
+      {/* ── All-time headline ───────────────────────────────────────────────── */}
+      <div className="rounded-xl bg-slate-700/40 p-4">
+        <p className="mb-1 text-xs text-slate-500">All-time net to Anthropic</p>
+        <p
+          className={`text-2xl font-bold ${
+            isLosingAllTime ? 'text-red-400' : 'text-emerald-400'
+          }`}
+        >
+          {isLosingAllTime ? '−' : '+'}
+          {formatCost(Math.abs(profit))}
+        </p>
+        <p className="mt-1 text-xs text-slate-500">
+          {formatCost(revenue)} subscription revenue
+          {' · '}
+          {formatCost(cost)} in compute (API list-price equiv.)
+          {hasDesignCost && (
+            <>
+              {' · '}
+              {formatCost(designCost)} Claude Design delivery
+            </>
+          )}
+        </p>
       </div>
-
-      {/* ── Per-month profit/loss bar chart ────────────────────────────────── */}
-      {chartData.length > 0 && (
-        <div>
-          <p className="mb-3 text-xs font-medium text-slate-400">
-            Anthropic's monthly gain / loss from you
-          </p>
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart
-              data={chartData}
-              margin={{ top: 5, right: 10, bottom: 5, left: 0 }}
-            >
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="#334155"
-                strokeOpacity={0.5}
-              />
-              <XAxis
-                dataKey="label"
-                tick={{ fill: '#64748b', fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                tickFormatter={(v) => `$${v}`}
-                tick={{ fill: '#64748b', fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-                width={45}
-              />
-              <Tooltip
-                content={<CustomTooltip subCost={subscriptionCost} />}
-              />
-              <ReferenceLine
-                y={0}
-                stroke="#64748b"
-                strokeWidth={1}
-              />
-              <Bar dataKey="profit" radius={[4, 4, 0, 0]} maxBarSize={50}>
-                {chartData.map((entry, i) => (
-                  <Cell
-                    key={i}
-                    fill={entry.profit >= 0 ? '#10b981' : '#f43f5e'}
-                    fillOpacity={0.85}
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-          <p className="mt-1 text-center text-xs text-slate-600">
-            Green = Anthropic profits · Red = Anthropic subsidises you
-          </p>
-        </div>
-      )}
 
       {/* ── Breakdown row ───────────────────────────────────────────────────── */}
       <div className="rounded-xl border border-slate-700/40 bg-slate-900/40 p-3">
@@ -232,6 +117,14 @@ export function AnthropicPnL({
             <span>Estimated compute cost (API-rate equivalent)</span>
             <span className="text-red-400 font-medium">− {formatCost(cost)}</span>
           </div>
+          {hasDesignCost && (
+            <div className="flex justify-between">
+              <span>
+                Claude Design feature delivery ({months} × {formatCost(claudeDesignMonthlyCost)})
+              </span>
+              <span className="text-red-400 font-medium">− {formatCost(designCost)}</span>
+            </div>
+          )}
           <div className="flex justify-between border-t border-slate-700/60 pt-1 mt-1">
             <span className="font-medium text-slate-300">Net to Anthropic</span>
             <span
@@ -249,6 +142,8 @@ export function AnthropicPnL({
       <p className="text-xs text-slate-600 leading-relaxed">
         * Compute cost is approximated using public Anthropic API rates. Actual
         infrastructure margins vary; this is illustrative, not Anthropic's real P&amp;L.
+        Per-month figures are intentionally omitted — short windows are too noisy
+        to report meaningfully.
       </p>
     </div>
   );

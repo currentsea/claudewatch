@@ -4,6 +4,7 @@
  * the filesystem.
  *
  * Mirrors `src/utils/pricing.ts` defaults — both must stay in sync.
+ * Latest models: Opus 4.8 (most capable), Sonnet 4.6 (balanced), Haiku 4.5 (fastest).
  * Source: https://docs.anthropic.com/en/docs/about-claude/pricing (May 2026)
  */
 
@@ -62,7 +63,7 @@ function computeTokenCost(tokens, modelId, pricing) {
   );
 }
 
-function getBillingPeriodStart(billingDay = 1, now = new Date()) {
+function getBillingPeriodStart(billingDay = 30, now = new Date()) {
   const year = now.getFullYear();
   const month = now.getMonth();
   const day = now.getDate();

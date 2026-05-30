@@ -170,6 +170,13 @@ export function PricingSettingsPanel({ settings, onChange }: Props) {
     [settings, onChange]
   );
 
+  const setClaudeDesignCost = useCallback(
+    (value: number) => {
+      onChange({ ...settings, claudeDesignMonthlyCost: value });
+    },
+    [settings, onChange]
+  );
+
   return (
     <div className="mx-auto max-w-4xl px-4 pb-12 pt-6 sm:px-6">
       {/* ── Page header ──────────────────────────────────────────────────────── */}
@@ -199,7 +206,7 @@ export function PricingSettingsPanel({ settings, onChange }: Props) {
 
       <div className="mb-8 space-y-3">
         <ModelPricingRow
-          name="Claude Opus"
+          name="Claude Opus 4.8"
           color="text-purple-400"
           badge="Most capable"
           badgeColor="border-purple-500/30 text-purple-400 bg-purple-500/10"
@@ -208,7 +215,7 @@ export function PricingSettingsPanel({ settings, onChange }: Props) {
           onChange={(v) => setModelPricing('opus', v)}
         />
         <ModelPricingRow
-          name="Claude Sonnet"
+          name="Claude Sonnet 4.6"
           color="text-indigo-400"
           badge="Balanced"
           badgeColor="border-indigo-500/30 text-indigo-400 bg-indigo-500/10"
@@ -217,7 +224,7 @@ export function PricingSettingsPanel({ settings, onChange }: Props) {
           onChange={(v) => setModelPricing('sonnet', v)}
         />
         <ModelPricingRow
-          name="Claude Haiku"
+          name="Claude Haiku 4.5"
           color="text-cyan-400"
           badge="Fastest"
           badgeColor="border-cyan-500/30 text-cyan-400 bg-cyan-500/10"
@@ -287,12 +294,42 @@ export function PricingSettingsPanel({ settings, onChange }: Props) {
         </div>
       </div>
 
+      {/* ── Feature delivery costs ───────────────────────────────────────────── */}
+      <SectionHeading icon={DollarSign}>
+        Feature Delivery Costs &nbsp;(USD / month)
+      </SectionHeading>
+
+      <div className="mb-8 rounded-xl border border-slate-700/60 bg-slate-800/50 p-4">
+        <p className="mb-4 text-xs text-slate-500">
+          Estimated monthly cost for Anthropic to deliver the Claude Design
+          feature. Tracked as its own line item in Anthropic's all-time P&amp;L,
+          on top of the API-equivalent compute cost.
+        </p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="space-y-1">
+            <div className="mb-2 flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              <span className="text-sm font-semibold text-emerald-400">
+                Claude Design
+              </span>
+            </div>
+            <PriceField
+              label="Monthly cost"
+              step="1"
+              value={settings.claudeDesignMonthlyCost}
+              onChange={(v) => setClaudeDesignCost(Math.round(v * 100) / 100)}
+            />
+            <p className="text-xs text-slate-600">Default: $5/mo</p>
+          </div>
+        </div>
+      </div>
+
       {/* ── How costs are calculated ─────────────────────────────────────────── */}
       <SectionHeading icon={Info}>How costs are calculated</SectionHeading>
 
       <div className="mb-8 rounded-xl border border-slate-700/60 bg-slate-800/50 p-5 text-sm text-slate-400 space-y-3">
         <p>
-          BurnItDown reads every{' '}
+          ClaudeWatch reads every{' '}
           <code className="rounded bg-slate-700/60 px-1 text-slate-300">
             assistant
           </code>{' '}

@@ -1,5 +1,5 @@
 /**
- * BurnItDown — Claude Usage Analytics API Server
+ * ClaudeWatch — Claude Usage Analytics API Server
  * Reads ~/.claude data files and exposes aggregated usage + cost data.
  */
 
@@ -18,6 +18,15 @@ const {
   extractProjectName: extractProjectNamePure,
 } = require('./pricing');
 
+const {
+  openDatabase,
+  rateAt,
+  recordPrice,
+  listPriceHistory,
+  upsertAggregate,
+  queryAggregates,
+} = require('./db');
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -25,7 +34,28 @@ app.use(express.json());
 // ── Config ────────────────────────────────────────────────────────────────────
 const CLAUDE_DATA_PATH =
   process.env.CLAUDE_DATA_PATH || path.join(os.homedir(), '.claude');
-const BILLING_DAY = parseInt(process.env.BILLING_DAY || '1', 10);
+const BILLING_DAY = parseInt(process.env.BILLING_DAY || '30', 10);
+
+// ── Database ──────────────────────────────────────────────────────────────────
+const db = openDatabase(CLAUDE_DATA_PATH);
+
+/**
+ * Build a per-tier pricing object reflecting the rates effective at the given
+ * ISO timestamp. Falls back to current MODEL_PRICING for any (tier, dimension)
+ * not yet recorded in price_history.
+ */
+function pricingAt(isoDate) {
+  const tiers = ['opus', 'sonnet', 'haiku'];
+  const dims = ['input', 'output', 'cacheCreation', 'cacheRead'];
+  const out = {};
+  for (const tier of tiers) {
+    out[tier] = { ...MODEL_PRICING[tier] };
+    for (const dim of dims) {
+      out[tier][dim] = rateAt(db, tier, dim, isoDate, MODEL_PRICING[tier][dim]);
+    }
+  }
+  return out;
+}
 
 function getBillingPeriodStart(billingDay = BILLING_DAY) {
   return getBillingPeriodStartPure(billingDay, new Date());
@@ -212,9 +242,15 @@ app.get('/api/usage', (req, res) => {
     const statsCache = readStatsCache();
     const billingPeriodStart = getBillingPeriodStart();
 
-    // ── Session data ──────────────────────────────────────────────────────────
+    // ── Detect missing-data state up front ────────────────────────────────────
+    const claudeDirExists = fs.existsSync(CLAUDE_DATA_PATH);
     const projectsPath = path.join(CLAUDE_DATA_PATH, 'projects');
-    const jsonlFiles = findJsonlFiles(projectsPath);
+    const projectsExists = fs.existsSync(projectsPath);
+    let noDataReason = null;
+    if (!claudeDirExists) noDataReason = 'missing-claude-dir';
+
+    // ── Session data ──────────────────────────────────────────────────────────
+    const jsonlFiles = projectsExists ? findJsonlFiles(projectsPath) : [];
 
     const allSessions = jsonlFiles
       .map((f) => parseSession(f))
@@ -225,11 +261,46 @@ app.get('/api/usage', (req, res) => {
           new Date(a.lastActivity || 0).getTime()
       );
 
+    if (!noDataReason && allSessions.length === 0) {
+      noDataReason = statsCache ? 'no-sessions' : 'no-stats-cache';
+    }
+
     // Re-compute session costs using the effective (possibly custom) pricing
+    // and persist a per-session-model aggregate row using HISTORICAL pricing.
     for (const session of allSessions) {
       session.estimatedCost = 0;
+
+      // Use the session's last activity to pick historical rates.
+      // Falls back to defaults when no history exists.
+      const asOf = session.lastActivity || session.timestamp || new Date().toISOString();
+      const histPricing = pricingAt(asOf);
+      const month = asOf.substring(0, 7); // "2026-05"
+      const day = asOf.substring(0, 10);  // "2026-05-25"
+
       for (const [model, tokens] of Object.entries(session.models)) {
-        session.estimatedCost += computeTokenCost(tokens, model, effectivePricing);
+        const liveCost = computeTokenCost(tokens, model, effectivePricing);
+        session.estimatedCost += liveCost;
+
+        // Historical cost — what this session would have cost at the
+        // rate in effect on its activity date.
+        const histCost = computeTokenCost(tokens, model, histPricing);
+        const tier = getModelTier(model);
+
+        upsertAggregate(db, {
+          sessionId: session.sessionId,
+          project: session.project,
+          month,
+          day,
+          tier,
+          model,
+          messages: session.messageCount,
+          inputTokens: tokens.inputTokens || 0,
+          outputTokens: tokens.outputTokens || 0,
+          cacheReadTokens: tokens.cacheReadInputTokens || 0,
+          cacheCreateTokens: tokens.cacheCreationInputTokens || 0,
+          apiCost: histCost,
+          updatedAt: new Date().toISOString(),
+        });
       }
     }
 
@@ -259,6 +330,14 @@ app.get('/api/usage', (req, res) => {
     }
 
     // ── Current billing period costs (from session files) ─────────────────────
+    // Includes:
+    //   1. Sessions whose last activity falls within the current billing period.
+    //   2. Sessions in an active 5h rolling window — these represent
+    //      already-incurred costs to Anthropic even if their last activity
+    //      timestamp is technically before the period boundary.
+    const windowMs = ACTIVE_WINDOW_MS;
+    const nowMs = Date.now();
+
     let currentPeriodCost = 0;
     const currentPeriodTokens = {
       inputTokens: 0,
@@ -271,7 +350,11 @@ app.get('/api/usage', (req, res) => {
       const actDate = session.lastActivity
         ? new Date(session.lastActivity)
         : null;
-      if (actDate && actDate >= billingPeriodStart) {
+      const inBillingPeriod = actDate && actDate >= billingPeriodStart;
+      const inActiveWindow =
+        actDate && nowMs - actDate.getTime() <= windowMs;
+
+      if (inBillingPeriod || inActiveWindow) {
         currentPeriodCost += session.estimatedCost;
         currentPeriodTokens.inputTokens += session.totalTokens.inputTokens;
         currentPeriodTokens.outputTokens += session.totalTokens.outputTokens;
@@ -400,6 +483,9 @@ app.get('/api/usage', (req, res) => {
       sessions: allSessions.slice(0, 75),
       activeSessions: buildActiveSessions(allSessions),
       modelPricing: effectivePricing,
+      claudeDataPath: CLAUDE_DATA_PATH,
+      claudeDataAvailable: noDataReason === null,
+      noDataReason: noDataReason || undefined,
     });
   } catch (err) {
     console.error('Error building usage response:', err);
@@ -444,6 +530,66 @@ app.get('/api/sessions/:id', (req, res) => {
 });
 
 /**
+ * Aggregated usage rolled up by project × month × tier.
+ * Backed by the SQLite session_aggregates table — populated on every
+ * /api/usage call using historical pricing.
+ */
+app.get('/api/aggregates', (_req, res) => {
+  try {
+    const result = queryAggregates(db);
+    res.json(result);
+  } catch (err) {
+    console.error('Error reading aggregates:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Price history — list every (tier, dimension, rate, effectiveFrom, source)
+ * row from the SQLite price_history table. Powers the historical-rate UI
+ * in the Pricing Settings panel.
+ */
+app.get('/api/price-history', (_req, res) => {
+  try {
+    res.json({ entries: listPriceHistory(db) });
+  } catch (err) {
+    console.error('Error reading price history:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Record a price change. Body: { tier, dimension, rate, effectiveFrom, source }.
+ * Used when Anthropic updates list rates so historical sessions can be costed
+ * at the rate that was active when they ran.
+ */
+app.post('/api/price-history', (req, res) => {
+  const { tier, dimension, rate, effectiveFrom, source } = req.body || {};
+  if (
+    !['opus', 'sonnet', 'haiku'].includes(tier) ||
+    !['input', 'output', 'cacheCreation', 'cacheRead'].includes(dimension) ||
+    typeof rate !== 'number' ||
+    rate < 0 ||
+    !effectiveFrom
+  ) {
+    return res.status(400).json({ error: 'Invalid price-history entry' });
+  }
+  try {
+    recordPrice(db, {
+      tier,
+      dimension,
+      rate,
+      effectiveFrom,
+      source: source || 'user-entered',
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Error recording price:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
  * Identify currently active (recently used) sessions.
  *
  * Claude Code / Claude.ai operate on a rolling ~5-hour usage window per the
@@ -453,9 +599,14 @@ app.get('/api/sessions/:id', (req, res) => {
  *
  * If you'd like a different window length, set CLAUDE_USAGE_WINDOW_HOURS.
  */
+const ACTIVE_WINDOW_HOURS = parseFloat(
+  process.env.CLAUDE_USAGE_WINDOW_HOURS || '5'
+);
+const ACTIVE_WINDOW_MS = ACTIVE_WINDOW_HOURS * 60 * 60 * 1000;
+
 function buildActiveSessions(allSessions) {
-  const windowHours = parseFloat(process.env.CLAUDE_USAGE_WINDOW_HOURS || '5');
-  const windowMs = windowHours * 60 * 60 * 1000;
+  const windowHours = ACTIVE_WINDOW_HOURS;
+  const windowMs = ACTIVE_WINDOW_MS;
   const now = Date.now();
 
   const active = [];
@@ -493,9 +644,9 @@ function buildActiveSessions(allSessions) {
 // ── Start ─────────────────────────────────────────────────────────────────────
 const PORT = process.env.SERVER_PORT || 3001;
 const server = app.listen(PORT, () => {
-  console.log(`🔥 BurnItDown API server → http://localhost:${PORT}`);
-  console.log(`📁 Claude data path      → ${CLAUDE_DATA_PATH}`);
-  console.log(`📅 Billing day of month  → ${BILLING_DAY}`);
+  console.log(`👁  ClaudeWatch API server → http://localhost:${PORT}`);
+  console.log(`📁 Claude data path       → ${CLAUDE_DATA_PATH}`);
+  console.log(`📅 Billing day of month   → ${BILLING_DAY}`);
 });
 
 server.on('error', (err) => {

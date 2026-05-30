@@ -1,4 +1,4 @@
-// ── Domain types for BurnItDown dashboard ─────────────────────────────────────
+// ── Domain types for ClaudeWatch dashboard ────────────────────────────────────
 
 export type SubscriptionTier = number;
 
@@ -22,6 +22,8 @@ export interface PricingSettings {
     max5x: number;
     max20x: number;
   };
+  /** Estimated monthly cost (USD) for Anthropic to deliver the Claude Design feature. */
+  claudeDesignMonthlyCost: number;
 }
 
 export interface TokenCounts {
@@ -87,6 +89,8 @@ export interface TotalStats {
   grandTotal: number;
 }
 
+export type NoDataReason = 'missing-claude-dir' | 'no-sessions' | 'no-stats-cache';
+
 export interface UsageData {
   timestamp: string;
   billingPeriodStart: string;
@@ -98,6 +102,12 @@ export interface UsageData {
   sessions: Session[];
   activeSessions: ActiveSession[];
   modelPricing: Record<string, ModelPricing>;
+  /** Path the server is reading from (echoed back for diagnostics). */
+  claudeDataPath: string;
+  /** True when the server found a usable Claude data dir with sessions. */
+  claudeDataAvailable: boolean;
+  /** When claudeDataAvailable === false, why. */
+  noDataReason?: NoDataReason;
 }
 
 export interface ActiveSession {
@@ -141,16 +151,35 @@ export interface ModelPricing {
   cacheRead: number;
 }
 
-/**
- * A "tick" entry — one entry per refresh-interval poll where new tokens were
- * consumed since the previous tick.
- */
-export interface TickEntry {
-  id: string;
-  timestamp: string;
-  deltaCost: number;          // incremental API cost since previous tick
-  deltaTokens: number;        // incremental grand-total tokens since previous tick
-  totalApiCost: number;       // running all-time API-equivalent cost
-  currentPeriodCost: number;  // running cost for the current billing period
-  intervalMs: number;         // how long the tick interval was at the time
+// ── Aggregates (SQLite-backed) ────────────────────────────────────────────────
+
+export interface PriceHistoryEntry {
+  tier: 'opus' | 'sonnet' | 'haiku';
+  dimension: 'input' | 'output' | 'cacheCreation' | 'cacheRead';
+  rate: number;
+  effectiveFrom: string; // ISO date
+  source: string;
+}
+
+export interface AggregateRow {
+  project: string;
+  month: string;       // "2026-05"
+  tier: 'opus' | 'sonnet' | 'haiku' | 'unknown';
+  sessions: number;
+  messages: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
+  apiCost: number;
+}
+
+export interface AggregatesPayload {
+  rows: AggregateRow[];
+  totals: {
+    sessions: number;
+    messages: number;
+    tokens: number;
+    apiCost: number;
+  };
 }

@@ -1,5 +1,5 @@
 {
-  "name": "burnitdown",
+  "name": "claudewatch",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
@@ -11,6 +11,7 @@
     "@types/node": "^16.18.126",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
+    "better-sqlite3": "^12.10.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "lucide-react": "^1.16.0",

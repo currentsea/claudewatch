@@ -1,16 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { PricingSettings, TickEntry, UsageData } from '../types';
+import { PricingSettings, UsageData } from '../types';
 
-// Default tick interval: 90 seconds (1 minute 30 seconds)
 const DEFAULT_INTERVAL_MS =
   parseInt(process.env.REACT_APP_REFRESH_INTERVAL || '90', 10) * 1000;
-
-// Cap how many ticks we keep in memory so long-running tabs don't grow unbounded.
-const MAX_TICKS = 500;
-
-// Minimum incremental cost (in USD) needed to record a tick.
-// Filters out floating-point noise when nothing meaningful changed.
-const COST_EPSILON = 0.000001;
 
 interface UseUsageDataResult {
   data: UsageData | null;
@@ -20,8 +12,6 @@ interface UseUsageDataResult {
   refresh: () => void;
   secondsUntilRefresh: number;
   intervalMs: number;
-  ticks: TickEntry[];
-  clearTicks: () => void;
 }
 
 function buildUrl(pricingSettings?: PricingSettings): string {
@@ -41,16 +31,9 @@ export function useUsageData(
   const [secondsUntilRefresh, setSecondsUntilRefresh] = useState(
     DEFAULT_INTERVAL_MS / 1000
   );
-  const [ticks, setTicks] = useState<TickEntry[]>([]);
 
-  // Keep pricing in a ref so fetchData always reads the latest without
-  // becoming a dependency (avoids restarting the interval on every keystroke).
   const pricingRef = useRef(pricingSettings);
   pricingRef.current = pricingSettings;
-
-  // Previous tick state — used to compute deltas for the next tick.
-  const prevCostRef = useRef<number | null>(null);
-  const prevTokensRef = useRef<number | null>(null);
 
   const fetchRef = useRef<number>(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -68,34 +51,6 @@ export function useUsageData(
       }
       const json: UsageData = await res.json();
       if (id === fetchRef.current) {
-        // ── Tick detection ────────────────────────────────────────────────────
-        const newCost = json.computedCosts.totalApiCost;
-        const newTokens = json.totalStats.grandTotal;
-
-        if (
-          prevTokensRef.current !== null &&
-          prevCostRef.current !== null &&
-          newTokens > prevTokensRef.current
-        ) {
-          const deltaCost = newCost - prevCostRef.current;
-          const deltaTokens = newTokens - prevTokensRef.current;
-          if (deltaCost > COST_EPSILON) {
-            const entry: TickEntry = {
-              id: `tick-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-              timestamp: json.timestamp,
-              deltaCost,
-              deltaTokens,
-              totalApiCost: newCost,
-              currentPeriodCost: json.computedCosts.currentPeriodCost,
-              intervalMs: DEFAULT_INTERVAL_MS,
-            };
-            setTicks((prev) => [entry, ...prev].slice(0, MAX_TICKS));
-          }
-        }
-
-        prevCostRef.current = newCost;
-        prevTokensRef.current = newTokens;
-
         setData(json);
         setError(null);
         setLastUpdated(new Date());
@@ -108,11 +63,8 @@ export function useUsageData(
     } finally {
       if (id === fetchRef.current) setLoading(false);
     }
-  }, []); // stable — reads pricing from ref
+  }, []);
 
-  const clearTicks = useCallback(() => setTicks([]), []);
-
-  // Initial fetch + interval
   useEffect(() => {
     fetchData();
 
@@ -133,7 +85,6 @@ export function useUsageData(
     };
   }, [fetchData, autoRefresh]);
 
-  // Re-fetch whenever pricing settings change (after initial mount)
   const isFirstMount = useRef(true);
   const pricingKey = pricingSettings
     ? JSON.stringify(pricingSettings)
@@ -156,7 +107,5 @@ export function useUsageData(
     refresh: fetchData,
     secondsUntilRefresh,
     intervalMs: DEFAULT_INTERVAL_MS,
-    ticks,
-    clearTicks,
   };
 }

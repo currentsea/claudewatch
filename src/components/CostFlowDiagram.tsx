@@ -45,8 +45,9 @@ export function CostFlowDiagram({ data, subscriptionCost }: Props) {
   );
 
   const totalCost = computedCosts.totalApiCost;
-  const pnl = subscriptionCost - computedCosts.currentPeriodCost;
-  const subsidising = pnl < 0;
+  // Net value to *you* (the subscriber) this period: positive = subscription wins
+  const subscriberNet = computedCosts.currentPeriodCost - subscriptionCost;
+  const subscriberAhead = subscriberNet >= 0;
 
   const tokenBuckets = [
     {
@@ -219,18 +220,18 @@ export function CostFlowDiagram({ data, subscriptionCost }: Props) {
         <ArrowDown size={18} />
       </div>
 
-      {/* ── Step 4: comparison ────────────────────────────────────────────── */}
+      {/* ── Step 4: comparison (subscriber's perspective) ─────────────────── */}
       <div className="my-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
         <span className="rounded-md bg-slate-700/60 px-1.5 py-0.5 text-[10px] text-slate-300">
           4
         </span>
-        Subtract from this period's subscription revenue
+        Compare to your flat-rate subscription
       </div>
       <div className="grid grid-cols-3 items-center gap-3">
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-center">
-          <p className="text-xs text-emerald-300/80">You paid this period</p>
-          <p className="text-xl font-bold text-emerald-300">
-            {formatCost(subscriptionCost)}
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-center">
+          <p className="text-xs text-amber-300/80">API cost this period</p>
+          <p className="text-xl font-bold text-amber-300">
+            {formatCost(computedCosts.currentPeriodCost)}
           </p>
         </div>
         <div className="flex flex-col items-center text-slate-500">
@@ -240,25 +241,25 @@ export function CostFlowDiagram({ data, subscriptionCost }: Props) {
         </div>
         <div
           className={`rounded-xl border p-3 text-center ${
-            subsidising
-              ? 'border-red-500/30 bg-red-500/10'
-              : 'border-emerald-500/30 bg-emerald-500/10'
+            subscriberAhead
+              ? 'border-emerald-500/30 bg-emerald-500/10'
+              : 'border-amber-500/30 bg-amber-500/10'
           }`}
         >
           <p
             className={`text-xs ${
-              subsidising ? 'text-red-300/80' : 'text-emerald-300/80'
+              subscriberAhead ? 'text-emerald-300/80' : 'text-amber-300/80'
             }`}
           >
-            Anthropic this period
+            Net to you (subscriber)
           </p>
           <p
             className={`text-xl font-bold ${
-              subsidising ? 'text-red-300' : 'text-emerald-300'
+              subscriberAhead ? 'text-emerald-300' : 'text-amber-300'
             }`}
           >
-            {pnl >= 0 ? '+' : '−'}
-            {formatCost(Math.abs(pnl))}
+            {subscriberAhead ? '+' : '−'}
+            {formatCost(Math.abs(subscriberNet))}
           </p>
         </div>
       </div>
