@@ -642,7 +642,7 @@ function buildActiveSessions(allSessions) {
 }
 
 // ── Start ─────────────────────────────────────────────────────────────────────
-const PORT = process.env.SERVER_PORT || 3001;
+const PORT = process.env.SERVER_PORT || 3005;
 const server = app.listen(PORT, () => {
   console.log(`👁  ClaudeWatch API server → http://localhost:${PORT}`);
   console.log(`📁 Claude data path       → ${CLAUDE_DATA_PATH}`);

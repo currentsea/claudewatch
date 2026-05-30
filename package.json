@@ -22,7 +22,7 @@
     "typescript": "^4.9.5",
     "web-vitals": "^2.1.4"
   },
-  "proxy": "http://localhost:3001",
+  "proxy": "http://localhost:3005",
   "scripts": {
     "start": "concurrently --kill-others-on-fail \"npm run server\" \"npm run client\"",
     "client": "react-scripts start",

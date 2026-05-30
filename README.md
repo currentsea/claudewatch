@@ -64,7 +64,7 @@ npm start
 
 `npm start` launches two processes in parallel:
 
-- **Backend** at `http://localhost:3001` — reads `~/.claude` and serves
+- **Backend** at `http://localhost:3005` — reads `~/.claude` and serves
   aggregated JSON.
 - **Frontend** at `http://localhost:3000` — opens automatically in your
   browser.
@@ -75,7 +75,7 @@ jump to [Troubleshooting](#troubleshooting).
 ### Running the pieces independently
 
 ```bash
-npm run server   # API only (port 3001)
+npm run server   # API only (port 3005)
 npm run client   # React dev server only (port 3000)
 ```
 
@@ -180,7 +180,7 @@ Copy `.env.example` to `.env` and override any of the following.
 | Variable | Default | Description |
 |---|---|---|
 | `CLAUDE_DATA_PATH` | `~/.claude` | Absolute path to your Claude Code data directory. Only change if you moved it. |
-| `SERVER_PORT` | `3001` | TCP port for the Express API server. If you change this, also update the `proxy` field in `package.json`. |
+| `SERVER_PORT` | `3005` | TCP port for the Express API server. If you change this, also update the `proxy` field in `package.json`. |
 | `BILLING_DAY` | `30` | Day-of-month when your Anthropic subscription renews. E.g. `15` if you subscribed on the 15th. |
 | `CLAUDE_USAGE_WINDOW_HOURS` | `5` | Length of Claude's rolling usage window. Used to compute "active sessions" remaining time. |
 
@@ -200,23 +200,23 @@ The frontend is up but the backend isn't.
 
 ```bash
 # Is the backend actually running?
-lsof -i:3001
+lsof -i:3005
 
 # If not, start it manually so you can see the logs:
 npm run server
 ```
 
 Common causes:
-- Port 3001 is already in use → see "Port 3001 already in use" below.
+- Port 3005 is already in use → see "Port 3005 already in use" below.
 - `CLAUDE_DATA_PATH` is wrong → check the line `📁 Claude data path → …` in
   the server logs.
 
-### Port 3001 already in use
+### Port 3005 already in use
 
 The server prints clear instructions, but the one-liner:
 
 ```bash
-lsof -ti:3001 | xargs kill -9
+lsof -ti:3005 | xargs kill -9
 npm start
 ```
 

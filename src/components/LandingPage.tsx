@@ -254,7 +254,7 @@ export function LandingPage() {
             <Step
               number={3}
               title="Start the application"
-              description="This single command starts both the backend API server (port 3001) and the React frontend (port 3000). Your browser will open automatically."
+              description="This single command starts both the backend API server (port 3005) and the React frontend (port 3000). Your browser will open automatically."
               code="npm start"
             />
             <Step
@@ -295,12 +295,12 @@ export function LandingPage() {
                 </tr>
                 <tr className="border-b border-slate-700/30">
                   <td className="px-4 py-2.5 font-mono text-amber-300">BILLING_DAY</td>
-                  <td className="px-4 py-2.5 font-mono text-slate-400">1</td>
+                  <td className="px-4 py-2.5 font-mono text-slate-400">30</td>
                   <td className="px-4 py-2.5">Day of month your billing period starts</td>
                 </tr>
                 <tr className="border-b border-slate-700/30">
-                  <td className="px-4 py-2.5 font-mono text-amber-300">PORT</td>
-                  <td className="px-4 py-2.5 font-mono text-slate-400">3001</td>
+                  <td className="px-4 py-2.5 font-mono text-amber-300">SERVER_PORT</td>
+                  <td className="px-4 py-2.5 font-mono text-slate-400">3005</td>
                   <td className="px-4 py-2.5">API server port</td>
                 </tr>
                 <tr>
