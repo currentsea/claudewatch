@@ -24,3 +24,5 @@ yarn-error.log*
 
 .idea/
 .claude/
+# local env (committed demo defaults live in .env.example)
+.env

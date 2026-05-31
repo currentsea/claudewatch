@@ -16,6 +16,9 @@ const {
   computeTokenCost,
   getBillingPeriodStart: getBillingPeriodStartPure,
   extractProjectName: extractProjectNamePure,
+  DEMO_CUTOFF_DAY,
+  isBeforeDemoCutoff,
+  aggregateModelUsage,
 } = require('./pricing');
 
 const {
@@ -31,10 +34,45 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// ── .env loader ─────────────────────────────────────────────────────────────
+// The server runs under plain `node`, which does not read .env on its own.
+// Load it here (dependency-free) so committed defaults — IS_DEMO_MODE_JB_ENABLED,
+// BILLING_DAY, etc. — actually take effect. Real environment variables always
+// win over .env values.
+function loadDotEnv() {
+  try {
+    const text = fs.readFileSync(path.join(__dirname, '..', '.env'), 'utf8');
+    for (const line of text.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eq = trimmed.indexOf('=');
+      if (eq === -1) continue;
+      const key = trimmed.slice(0, eq).trim();
+      let val = trimmed.slice(eq + 1).trim();
+      if (
+        (val.startsWith('"') && val.endsWith('"')) ||
+        (val.startsWith("'") && val.endsWith("'"))
+      ) {
+        val = val.slice(1, -1);
+      }
+      if (key && !(key in process.env)) process.env[key] = val;
+    }
+  } catch {
+    /* no .env present — rely on real env vars + code defaults */
+  }
+}
+loadDotEnv();
+
 // ── Config ────────────────────────────────────────────────────────────────────
 const CLAUDE_DATA_PATH =
   process.env.CLAUDE_DATA_PATH || path.join(os.homedir(), '.claude');
 const BILLING_DAY = parseInt(process.env.BILLING_DAY || '30', 10);
+
+// Demo mode: defaults to ON (the value committed in .env). When enabled, all
+// sessions and statistics dated before DEMO_CUTOFF_DAY are ignored everywhere.
+// Set IS_DEMO_MODE_JB_ENABLED=false to see your full, unfiltered data.
+const IS_DEMO_MODE =
+  (process.env.IS_DEMO_MODE_JB_ENABLED ?? 'true').toLowerCase() === 'true';
 
 // ── Database ──────────────────────────────────────────────────────────────────
 const db = openDatabase(CLAUDE_DATA_PATH);
@@ -68,6 +106,43 @@ function readStatsCache() {
   } catch {
     return null;
   }
+}
+
+/**
+ * Demo mode: produce a stats-cache view that contains only data on/after the
+ * cutoff. The all-time `modelUsage` (which has no per-day breakdown) is rebuilt
+ * from the already-cutoff-filtered session set so every downstream total —
+ * totalApiCost, per-model costs, token counts, per-day costs — respects the
+ * cutoff. Daily arrays are filtered by their day string; first-session date and
+ * counts are recomputed from the filtered sessions.
+ */
+function buildDemoStatsCache(originalCache, filteredSessions, cutoffDay) {
+  const dailyActivity = (originalCache?.dailyActivity || []).filter(
+    (d) => d.date >= cutoffDay
+  );
+  const dailyModelTokens = (originalCache?.dailyModelTokens || []).filter(
+    (d) => d.date >= cutoffDay
+  );
+
+  let firstSessionDate = null;
+  for (const s of filteredSessions) {
+    const ts = s.timestamp || s.lastActivity;
+    if (ts && (!firstSessionDate || ts < firstSessionDate)) firstSessionDate = ts;
+  }
+  // Never report a first-session date earlier than the cutoff.
+  if (!firstSessionDate || isBeforeDemoCutoff(firstSessionDate, cutoffDay)) {
+    firstSessionDate = `${cutoffDay}T00:00:00.000Z`;
+  }
+
+  return {
+    ...(originalCache || {}),
+    modelUsage: aggregateModelUsage(filteredSessions),
+    dailyActivity,
+    dailyModelTokens,
+    firstSessionDate,
+    totalSessions: filteredSessions.filter((s) => !s.isSubagent).length,
+    totalMessages: filteredSessions.reduce((sum, s) => sum + (s.messageCount || 0), 0),
+  };
 }
 
 /**
@@ -239,7 +314,7 @@ app.get('/api/usage', (req, res) => {
       }
     }
 
-    const statsCache = readStatsCache();
+    let statsCache = readStatsCache();
     const billingPeriodStart = getBillingPeriodStart();
 
     // ── Detect missing-data state up front ────────────────────────────────────
@@ -252,7 +327,7 @@ app.get('/api/usage', (req, res) => {
     // ── Session data ──────────────────────────────────────────────────────────
     const jsonlFiles = projectsExists ? findJsonlFiles(projectsPath) : [];
 
-    const allSessions = jsonlFiles
+    let allSessions = jsonlFiles
       .map((f) => parseSession(f))
       .filter((s) => s.messageCount > 0)
       .sort(
@@ -260,6 +335,18 @@ app.get('/api/usage', (req, res) => {
           new Date(b.lastActivity || 0).getTime() -
           new Date(a.lastActivity || 0).getTime()
       );
+
+    // Demo mode: drop any session whose most recent activity predates the
+    // cutoff, so the sessions list, active sessions, current-period cost and
+    // aggregates all ignore pre-cutoff data. Filtering on last activity (rather
+    // than start) keeps the all-time total ≥ the sum of per-day costs, which
+    // the day-keyed daily/aggregate views are derived against. firstSessionDate
+    // is clamped to the cutoff in buildDemoStatsCache for sessions that straddle it.
+    if (IS_DEMO_MODE) {
+      allSessions = allSessions.filter(
+        (s) => !isBeforeDemoCutoff(s.lastActivity)
+      );
+    }
 
     if (!noDataReason && allSessions.length === 0) {
       noDataReason = statsCache ? 'no-sessions' : 'no-stats-cache';
@@ -302,6 +389,13 @@ app.get('/api/usage', (req, res) => {
           updatedAt: new Date().toISOString(),
         });
       }
+    }
+
+    // Demo mode: rebuild the stats-cache view from the cutoff-filtered sessions
+    // so every all-time figure below (totalApiCost, byModel, daily costs,
+    // token totals, firstSessionDate, counts) reflects only post-cutoff data.
+    if (IS_DEMO_MODE) {
+      statsCache = buildDemoStatsCache(statsCache, allSessions, DEMO_CUTOFF_DAY);
     }
 
     // ── All-time costs from stats-cache (most accurate) ───────────────────────
@@ -536,7 +630,11 @@ app.get('/api/sessions/:id', (req, res) => {
  */
 app.get('/api/aggregates', (_req, res) => {
   try {
-    const result = queryAggregates(db);
+    // Demo mode: exclude rows dated before the cutoff (the underlying rows
+    // store a day, so a mid-month cutoff still applies to the monthly rollup).
+    const result = queryAggregates(db, {
+      sinceDay: IS_DEMO_MODE ? DEMO_CUTOFF_DAY : null,
+    });
     res.json(result);
   } catch (err) {
     console.error('Error reading aggregates:', err);
@@ -643,10 +741,19 @@ function buildActiveSessions(allSessions) {
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 const PORT = process.env.SERVER_PORT || 3001;
-const server = app.listen(PORT, () => {
+// Bind to loopback by default: the API exposes local ~/.claude session contents
+// (message previews, cwd, git branch), so it must not be reachable from the LAN.
+// Override with SERVER_HOST=0.0.0.0 only if you intentionally want remote access.
+const HOST = process.env.SERVER_HOST || '127.0.0.1';
+const server = app.listen(PORT, HOST, () => {
   console.log(`👁  ClaudeWatch API server → http://localhost:${PORT}`);
   console.log(`📁 Claude data path       → ${CLAUDE_DATA_PATH}`);
   console.log(`📅 Billing day of month   → ${BILLING_DAY}`);
+  console.log(
+    `🎭 Demo mode              → ${
+      IS_DEMO_MODE ? `ON (ignoring data before ${DEMO_CUTOFF_DAY})` : 'OFF'
+    }`
+  );
 });
 
 server.on('error', (err) => {

@@ -208,8 +208,13 @@ function upsertAggregate(db, row) {
 
 /**
  * Aggregate by (project, month, tier). Returns rows ready for the subdashboard.
+ *
+ * When `sinceDay` (a "YYYY-MM-DD" string) is provided, rows dated before that
+ * day are excluded — used by demo mode to honor the hardcoded cutoff even
+ * though the rollup itself is monthly (the underlying rows store a day).
  */
-function queryAggregates(db, { groupBy = 'month' } = {}) {
+function queryAggregates(db, { groupBy = 'month', sinceDay = null } = {}) {
+  const where = sinceDay ? 'WHERE day >= @sinceDay' : '';
   const rows = db
     .prepare(
       `
@@ -225,11 +230,12 @@ function queryAggregates(db, { groupBy = 'month' } = {}) {
         SUM(cache_create_tokens) AS cacheCreationInputTokens,
         SUM(api_cost) AS apiCost
       FROM session_aggregates
+      ${where}
       GROUP BY project, month, tier
       ORDER BY month DESC, project, tier
     `
     )
-    .all();
+    .all(sinceDay ? { sinceDay } : {});
 
   const totals = rows.reduce(
     (acc, r) => {

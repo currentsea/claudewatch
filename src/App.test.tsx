@@ -268,26 +268,6 @@ it('renders the data disclaimer on the dashboard', async () => {
 
 // ── Period P&L card + time range selector ─────────────────────────────────────
 
-it('renders the period P&L card defaulting to the all-time (since-subscription) view', async () => {
-  render(<App />);
-  await screen.findByRole('heading', { name: /ClaudeWatch/i });
-  const selector = screen.getByTestId('time-range-selector');
-  expect(selector).toBeInTheDocument();
-  expect(selector).toHaveTextContent(/All time/i);
-  expect(screen.getByTestId('pnl-headline')).toBeInTheDocument();
-});
-
-it('lets the user switch the P&L time range away from the all-time default', async () => {
-  render(<App />);
-  await screen.findByRole('heading', { name: /ClaudeWatch/i });
-  fireEvent.click(screen.getByTestId('time-range-selector'));
-  fireEvent.click(await screen.findByTestId('time-range-thisMonth'));
-  await waitFor(() => {
-    // "This month" resolves to a month/year label (e.g. "May 2026"), not "All time"
-    expect(screen.getByTestId('time-range-selector')).not.toHaveTextContent(/All time/i);
-  });
-});
-
 // ── Session activity chart ────────────────────────────────────────────────────
 
 it('renders the active vs inactive sessions chart', async () => {

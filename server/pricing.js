@@ -84,6 +84,49 @@ function extractProjectName(filePath, sep = '/') {
   return 'unknown';
 }
 
+// ── Demo mode ──────────────────────────────────────────────────────────────────
+// When IS_DEMO_MODE_JB_ENABLED is on (the repository default — see .env), the
+// dashboard ignores all sessions and statistics dated before this day. The
+// cutoff is hardcoded by request. 2026-05-30 is also the billing-period start,
+// so in practice the demo is scoped to the current billing cycle onward.
+const DEMO_CUTOFF_DAY = '2026-05-30';
+
+/**
+ * True when an ISO timestamp falls before the demo cutoff day (missing dates
+ * are treated as "before" so they get filtered out). Compares the YYYY-MM-DD
+ * prefix, so it is timezone-agnostic and matches the cache's day strings.
+ */
+function isBeforeDemoCutoff(isoDate, cutoffDay = DEMO_CUTOFF_DAY) {
+  if (!isoDate) return true;
+  return String(isoDate).slice(0, 10) < cutoffDay;
+}
+
+/**
+ * Sum per-model token usage across parsed sessions, producing the same shape
+ * the dashboard reads from stats-cache `modelUsage`. Claude Code's synthetic
+ * internal model (id starting with "<") carries no real cost and is skipped.
+ * Used to rebuild all-time totals from a date-filtered session set in demo mode.
+ */
+function aggregateModelUsage(sessions) {
+  const usage = {};
+  for (const s of sessions || []) {
+    for (const [model, t] of Object.entries((s && s.models) || {})) {
+      if (model.startsWith('<')) continue;
+      const m = (usage[model] = usage[model] || {
+        inputTokens: 0,
+        outputTokens: 0,
+        cacheReadInputTokens: 0,
+        cacheCreationInputTokens: 0,
+      });
+      m.inputTokens += t.inputTokens || 0;
+      m.outputTokens += t.outputTokens || 0;
+      m.cacheReadInputTokens += t.cacheReadInputTokens || 0;
+      m.cacheCreationInputTokens += t.cacheCreationInputTokens || 0;
+    }
+  }
+  return usage;
+}
+
 module.exports = {
   MODEL_PRICING,
   getModelTier,
@@ -91,4 +134,7 @@ module.exports = {
   computeTokenCost,
   getBillingPeriodStart,
   extractProjectName,
+  DEMO_CUTOFF_DAY,
+  isBeforeDemoCutoff,
+  aggregateModelUsage,
 };

@@ -293,7 +293,7 @@ and try again.
 
 ## Running the tests
 
-The repo ships with 70+ unit tests covering all the pricing, billing-period
+The repo ships with 128 unit tests covering all the pricing, billing-period
 and project-name-extraction logic, plus an integration test that the
 dashboard renders without crashing.
 
@@ -310,14 +310,16 @@ npm run test:server
 
 Test files:
 
-- `src/utils/pricing.test.ts` — 44 tests covering frontend formatting, P&L,
+- `src/utils/pricing.test.ts` — 48 tests covering frontend formatting, P&L,
   subscription tier construction, localStorage round-trips, default-pricing
   invariants, edge cases (zero, negative, null dates, malformed JSON).
-- `src/App.test.tsx` — 2 tests confirming the dashboard renders after the
-  API resolves and that the footer attribution is present.
-- `server/pricing.test.js` — 26 tests covering server-side cost computation,
-  pricing overrides, billing-period boundary cases (including year wrap),
-  and project-name extraction edge cases.
+- `src/App.test.tsx` — 32 tests covering dashboard rendering, navigation
+  tabs, the dark/light theme toggle, provider switching, and the aggregates
+  subdashboard.
+- `server/pricing.test.js` and `server/db.test.js` — 48 tests covering
+  server-side cost computation, pricing overrides, billing-period boundary
+  cases (including year wrap), project-name extraction, the demo-mode cutoff,
+  and the SQLite price-history / aggregates layer.
 
 ---
 
@@ -367,34 +369,40 @@ claudewatch/
 ├── README.md                          # you are here
 ├── docs/                              # screenshots
 ├── server/
-│   ├── index.js                       # Express API server
-│   ├── pricing.js                     # pure helpers (testable)
-│   └── pricing.test.js                # 26 server-side tests
+│   ├── index.js                       # Express API server (binds 127.0.0.1)
+│   ├── pricing.js                     # pure cost/billing helpers (testable)
+│   ├── pricing.test.js                # server pricing/billing tests
+│   ├── db.js                          # SQLite price-history + aggregates
+│   └── db.test.js                     # database-layer tests
+├── scripts/
+│   ├── regenerate-stats-cache.js      # rebuild ~/.claude/stats-cache.json
+│   └── take-screenshots.js            # regenerate the README screenshots
 ├── src/
 │   ├── App.tsx                        # main dashboard
-│   ├── App.test.tsx                   # smoke test for the rendered app
+│   ├── App.test.tsx                   # dashboard render / navigation tests
 │   ├── hooks/useUsageData.ts          # polling + tick detection
 │   ├── types/index.ts                 # TypeScript domain types
 │   ├── utils/pricing.ts               # frontend pricing helpers
-│   ├── utils/pricing.test.ts          # 44 frontend tests
+│   ├── utils/pricing.test.ts          # frontend pricing/formatting tests
 │   └── components/
 │       ├── SubsidyHero.tsx            ← top-of-page subsidy story
 │       ├── CostFlowDiagram.tsx        ← step-by-step cost computation
 │       ├── ActiveSessionsPanel.tsx    ← live usage-window panel
+│       ├── SessionActivityChart.tsx   ← active vs by-day activity chart
+│       ├── SessionsTable.tsx          ← per-session P&L table
 │       ├── SessionDrilldownModal.tsx  ← per-session message timeline
-│       ├── SustainabilityLinks.tsx    ← background-reading sidebar
+│       ├── DrilldownModal.tsx         ← shared metric-breakdown modal
+│       ├── AggregatesDashboard.tsx    ← project × month × model rollups
+│       ├── AnthropicPnL.tsx           ← all-time Anthropic P&L
 │       ├── BurnMeter.tsx
-│       ├── AnthropicPnL.tsx
-│       ├── CostComparison.tsx
-│       ├── DailyPnL.tsx
-│       ├── ModelBreakdown.tsx
 │       ├── PricingSettingsPanel.tsx
-│       ├── SessionsTable.tsx
 │       ├── StatCard.tsx
 │       ├── SubscriptionSelector.tsx
-│       ├── TickHistory.tsx
-│       ├── TokenBreakdown.tsx
-│       └── UsageChart.tsx
+│       ├── ProviderSelector.tsx
+│       ├── ComingSoonProvider.tsx
+│       ├── LandingPage.tsx
+│       ├── DonatePage.tsx
+│       └── NoDataInstall.tsx
 ├── .env.example
 ├── tailwind.config.js
 └── package.json

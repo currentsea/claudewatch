@@ -5,6 +5,9 @@ const {
   computeTokenCost,
   getBillingPeriodStart,
   extractProjectName,
+  DEMO_CUTOFF_DAY,
+  isBeforeDemoCutoff,
+  aggregateModelUsage,
 } = require('./pricing');
 
 // ── getModelTier ──────────────────────────────────────────────────────────────
@@ -213,5 +216,91 @@ describe('MODEL_PRICING (defaults)', () => {
       const p = MODEL_PRICING[tier];
       expect(p.cacheRead).toBeCloseTo(p.input * 0.1, 4);
     }
+  });
+});
+
+// ── demo mode: isBeforeDemoCutoff ─────────────────────────────────────────────
+describe('isBeforeDemoCutoff', () => {
+  it('uses the hardcoded 2026-05-30 cutoff by default', () => {
+    expect(DEMO_CUTOFF_DAY).toBe('2026-05-30');
+  });
+
+  it('treats timestamps before the cutoff day as "before"', () => {
+    expect(isBeforeDemoCutoff('2026-05-29T23:59:59.999Z')).toBe(true);
+    expect(isBeforeDemoCutoff('2026-02-01T07:11:20.619Z')).toBe(true);
+    expect(isBeforeDemoCutoff('2025-12-31T00:00:00.000Z')).toBe(true);
+  });
+
+  it('keeps the cutoff day itself and anything after it', () => {
+    expect(isBeforeDemoCutoff('2026-05-30T00:00:00.000Z')).toBe(false);
+    expect(isBeforeDemoCutoff('2026-05-31T01:53:11.460Z')).toBe(false);
+    expect(isBeforeDemoCutoff('2026-06-01T00:00:00.000Z')).toBe(false);
+  });
+
+  it('treats missing/empty timestamps as before the cutoff (filtered out)', () => {
+    expect(isBeforeDemoCutoff(null)).toBe(true);
+    expect(isBeforeDemoCutoff(undefined)).toBe(true);
+    expect(isBeforeDemoCutoff('')).toBe(true);
+  });
+
+  it('honours a custom cutoff day argument', () => {
+    expect(isBeforeDemoCutoff('2026-05-23T00:00:00Z', '2026-05-24')).toBe(true);
+    expect(isBeforeDemoCutoff('2026-05-24T00:00:00Z', '2026-05-24')).toBe(false);
+  });
+});
+
+// ── demo mode: aggregateModelUsage ────────────────────────────────────────────
+describe('aggregateModelUsage', () => {
+  const sessions = [
+    {
+      models: {
+        'claude-opus-4-8': {
+          inputTokens: 100,
+          outputTokens: 10,
+          cacheReadInputTokens: 1000,
+          cacheCreationInputTokens: 50,
+        },
+      },
+    },
+    {
+      models: {
+        'claude-opus-4-8': {
+          inputTokens: 200,
+          outputTokens: 20,
+          cacheReadInputTokens: 2000,
+          cacheCreationInputTokens: 100,
+        },
+        'claude-sonnet-4-6': {
+          inputTokens: 5,
+          outputTokens: 5,
+          cacheReadInputTokens: 0,
+          cacheCreationInputTokens: 0,
+        },
+      },
+    },
+  ];
+
+  it('sums per-model token buckets across sessions', () => {
+    const usage = aggregateModelUsage(sessions);
+    expect(usage['claude-opus-4-8']).toEqual({
+      inputTokens: 300,
+      outputTokens: 30,
+      cacheReadInputTokens: 3000,
+      cacheCreationInputTokens: 150,
+    });
+    expect(usage['claude-sonnet-4-6'].inputTokens).toBe(5);
+  });
+
+  it('skips Claude Code\'s synthetic internal model', () => {
+    const usage = aggregateModelUsage([
+      { models: { '<synthetic>': { inputTokens: 999, outputTokens: 999 } } },
+    ]);
+    expect(usage['<synthetic>']).toBeUndefined();
+    expect(Object.keys(usage)).toHaveLength(0);
+  });
+
+  it('returns an empty object for no sessions', () => {
+    expect(aggregateModelUsage([])).toEqual({});
+    expect(aggregateModelUsage(null)).toEqual({});
   });
 });

@@ -28,8 +28,6 @@ import {
   buildSubscriptionTiers,
   loadPricingSettings,
   savePricingSettings,
-  buildTimeRange,
-  TimeRange,
 } from './utils/pricing';
 
 import { BurnMeter } from './components/BurnMeter';
@@ -46,7 +44,6 @@ import { LandingPage } from './components/LandingPage';
 import { AggregatesDashboard } from './components/AggregatesDashboard';
 import { ProviderSelector, Provider } from './components/ProviderSelector';
 import { ComingSoonProvider } from './components/ComingSoonProvider';
-import { PeriodPnLCard } from './components/PeriodPnLCard';
 import { SessionActivityChart } from './components/SessionActivityChart';
 import { NoDataInstall } from './components/NoDataInstall';
 
@@ -242,7 +239,6 @@ export default function App() {
   // Default to the all-time (since-subscription) view so the headline reflects
   // the full life of the $200/mo plan (anchored to May 30, 2025), not just the
   // current calendar month.
-  const [timeRange, setTimeRange] = useState<TimeRange>(() => buildTimeRange('allTime'));
 
   useEffect(() => {
     saveTheme(theme);
@@ -559,30 +555,6 @@ export default function App() {
                 {/* ── Disclaimer ───────────────────────────────────────────────── */}
                 <div className="mb-6">
                   <DisclaimerBanner />
-                </div>
-
-                {/* ── Period P&L hero ──────────────────────────────────────────── */}
-                <div className="mb-4 flex items-center gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                    Current P&amp;L
-                  </span>
-                  <div className="flex-1 border-t border-slate-700/60" />
-                  <span className={`text-xs font-medium ${sub.color}`}>
-                    {sub.label} · {sub.description}
-                  </span>
-                </div>
-
-                <div className="mb-6">
-                  <PeriodPnLCard
-                    range={timeRange}
-                    onChangeRange={setTimeRange}
-                    dailyActivity={data.dailyActivity}
-                    totalApiCost={totalApiCost}
-                    subscriptionCost={subscriptionCost}
-                    subscriptionLabel={`${sub.label} (${formatCost(subscriptionCost)}/mo)`}
-                    currentBillingPeriodCost={currentPeriodCost}
-                    billingPeriodStart={data.billingPeriodStart}
-                  />
                 </div>
 
                 <div className="mb-6">
