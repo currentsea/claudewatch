@@ -126,7 +126,7 @@ export function NoDataInstall({
           dashboard. The backend reads from{' '}
           <code className="rounded bg-slate-800/60 px-1 text-slate-300">{claudeDataPath}</code>;
           the frontend serves on{' '}
-          <code className="rounded bg-slate-800/60 px-1 text-slate-300">localhost:3000</code>.
+          <code className="rounded bg-slate-800/60 px-1 text-slate-300">localhost:3005</code>.
         </p>
         <CodeBlock label="Clone">
           git clone https://github.com/currentsea/claudewatch.git &amp;&amp; cd claudewatch
