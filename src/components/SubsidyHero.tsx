@@ -59,7 +59,7 @@ function PnlExplainer({
         <ol className="ml-4 list-decimal space-y-1 text-slate-400">
           <li>
             <span className="font-medium text-slate-300">Revenue</span>: your
-            monthly fee × months active.
+            monthly fee × months subscribed (since May 30, 2025).
           </li>
           <li>
             <span className="font-medium text-slate-300">Compute cost</span>:
@@ -208,7 +208,7 @@ export function SubsidyHero({
           <p className="mt-1.5 text-sm text-slate-400">
             Based on{' '}
             <span className="text-white">{months} billing month{months !== 1 ? 's' : ''}</span>{' '}
-            of usage.{' '}
+            paid (since May 30, 2025).{' '}
             {subsidising
               ? 'Your subscription does not cover the data-center spend behind your usage.'
               : 'Your subscription comfortably covers the data-center spend behind your usage.'}

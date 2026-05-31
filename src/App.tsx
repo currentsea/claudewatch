@@ -18,6 +18,7 @@ import {
   Wrench,
   Cpu,
   Database,
+  Receipt,
 } from 'lucide-react';
 
 import { useUsageData } from './hooks/useUsageData';
@@ -522,8 +523,12 @@ export default function App() {
                   })}
                 </span>
                 <span className="flex items-center gap-1.5 text-xs text-slate-400">
+                  <Receipt size={12} />
+                  Plan started May 30, 2025
+                </span>
+                <span className="flex items-center gap-1.5 text-xs text-slate-400">
                   <MessageSquare size={12} />
-                  Active since {firstDate}
+                  Usage data since {firstDate}
                 </span>
                 {lastUpdated && (
                   <span className="ml-auto flex items-center gap-1 text-xs text-slate-500">
