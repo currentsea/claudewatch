@@ -5,6 +5,7 @@ import {
   projectMonthly,
   formatMonthLabel,
   monthsActive,
+  subscriptionMonthsElapsed,
   anthropicPnL,
   getCustomerRating,
   buildSubscriptionTiers,
@@ -147,65 +148,78 @@ describe('monthsActive', () => {
   });
 });
 
+// ── subscriptionMonthsElapsed ─────────────────────────────────────────────────
+describe('subscriptionMonthsElapsed', () => {
+  // SUBSCRIPTION_START_DATE = 2025-05-30 (local). Use local-time literals.
+  it('returns 12 at the one-year anniversary (excludes the just-renewed month)', () => {
+    expect(subscriptionMonthsElapsed(new Date(2026, 4, 30, 12, 0, 0))).toBe(12);
+  });
+
+  it('returns 11 the day before the anniversary day-of-month', () => {
+    expect(subscriptionMonthsElapsed(new Date(2026, 4, 29, 12, 0, 0))).toBe(11);
+  });
+
+  it('floors at 1 on the start date itself', () => {
+    expect(subscriptionMonthsElapsed(new Date(2025, 4, 30, 12, 0, 0))).toBe(1);
+  });
+
+  it('floors at 1 before the subscription started', () => {
+    expect(subscriptionMonthsElapsed(new Date(2025, 0, 1, 12, 0, 0))).toBe(1);
+  });
+
+  it('counts a month only once its day-of-month anchor is reached', () => {
+    // Jun 29 2025: first month not yet complete → still 1
+    expect(subscriptionMonthsElapsed(new Date(2025, 5, 29, 12, 0, 0))).toBe(1);
+    // Jun 30 2025: first full month complete → 1; Jul 30 2025 → 2
+    expect(subscriptionMonthsElapsed(new Date(2025, 5, 30, 12, 0, 0))).toBe(1);
+    expect(subscriptionMonthsElapsed(new Date(2025, 6, 30, 12, 0, 0))).toBe(2);
+  });
+});
+
 // ── anthropicPnL ──────────────────────────────────────────────────────────────
 describe('anthropicPnL', () => {
+  // Revenue is now anchored to SUBSCRIPTION_START_DATE (2025-05-30), not the
+  // first session. At May 24, 2026 that is 11 completed subscription months.
   beforeEach(() => {
     jest.useFakeTimers('modern' as any);
     jest.setSystemTime(new Date(2026, 4, 24, 12, 0, 0).getTime()); // May 24, 2026
   });
   afterEach(() => jest.useRealTimers());
 
-  const may1 = () => new Date(2026, 4, 1).toISOString();
-  const dec1_2025 = () => new Date(2025, 11, 1).toISOString();
-
-  it('returns positive profit when subscription revenue > api cost', () => {
-    const result = anthropicPnL(20, 5, may1());
+  it('computes revenue from subscription months elapsed, regardless of usage start', () => {
+    const result = anthropicPnL(20, 5);
     expect(result).toEqual({
-      revenue: 20,
+      revenue: 220, // $20 × 11 months
       cost: 5,
       designCost: 0,
-      profit: 15,
-      months: 1,
+      profit: 215,
+      months: 11,
     });
   });
 
   it('returns negative profit when api cost > subscription revenue', () => {
-    const result = anthropicPnL(20, 100, may1());
-    expect(result.profit).toBe(-80);
-  });
-
-  it('multiplies revenue by months when usage spans multiple months', () => {
-    // 6 months × $20 = $120 revenue
-    const result = anthropicPnL(20, 50, dec1_2025());
-    expect(result.revenue).toBe(120);
-    expect(result.months).toBe(6);
-    expect(result.profit).toBe(70);
-  });
-
-  it('handles a null first-session date (treats as 1 month active)', () => {
-    const result = anthropicPnL(20, 5, null);
-    expect(result.months).toBe(1);
-    expect(result.revenue).toBe(20);
+    const result = anthropicPnL(20, 1000);
+    expect(result.profit).toBe(220 - 1000);
   });
 
   it('handles zero subscription cost', () => {
-    const result = anthropicPnL(0, 10, may1());
+    const result = anthropicPnL(0, 10);
     expect(result.revenue).toBe(0);
     expect(result.profit).toBe(-10);
   });
 
   it('handles zero api cost', () => {
-    const result = anthropicPnL(20, 0, may1());
-    expect(result.profit).toBe(20);
+    const result = anthropicPnL(20, 0);
+    expect(result.profit).toBe(220);
   });
 
-  it('subtracts the Claude Design delivery cost per active month', () => {
-    // 6 months active, $5/mo design cost = $30 design cost
-    const result = anthropicPnL(20, 50, dec1_2025(), 5);
-    expect(result.months).toBe(6);
-    expect(result.designCost).toBe(30);
-    // profit = 120 revenue − 50 compute − 30 design
-    expect(result.profit).toBe(40);
+  it('subtracts the Claude Design delivery cost per subscribed month', () => {
+    // 11 months subscribed, $5/mo design cost = $55 design cost
+    const result = anthropicPnL(20, 50, 5);
+    expect(result.months).toBe(11);
+    expect(result.designCost).toBe(55);
+    // profit = 220 revenue − 50 compute − 55 design
+    expect(result.profit).toBe(115);
   });
 });
 

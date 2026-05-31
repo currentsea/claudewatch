@@ -10,7 +10,6 @@ import {
 interface Props {
   subscriptionCost: SubscriptionTier;
   totalApiCost: number;
-  firstSessionDate: string | null;
   /** Estimated monthly cost (USD) for Anthropic to deliver the Claude Design feature. */
   claudeDesignMonthlyCost?: number;
 }
@@ -18,18 +17,17 @@ interface Props {
 /**
  * Anthropic-side P&L panel. Shows only the all-time figure — per-month
  * estimates are too noisy to report meaningfully (compute prices change,
- * billing-period boundaries vary), so we removed them.
+ * billing-period boundaries vary), so we removed them. Subscription months are
+ * counted from your $200/mo plan start (May 30, 2025), not the first session.
  */
 export function AnthropicPnL({
   subscriptionCost,
   totalApiCost,
-  firstSessionDate,
   claudeDesignMonthlyCost = 0,
 }: Props) {
   const { revenue, cost, designCost, profit, months } = anthropicPnL(
     subscriptionCost,
     totalApiCost,
-    firstSessionDate,
     claudeDesignMonthlyCost
   );
   const hasDesignCost = designCost > 0;

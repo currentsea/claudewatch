@@ -7,7 +7,7 @@ import {
   Coins,
 } from 'lucide-react';
 import { SubscriptionTier, DailyActivity } from '../types';
-import { TimeRange, formatCost } from '../utils/pricing';
+import { TimeRange, formatCost, subscriptionMonthsElapsed } from '../utils/pricing';
 import { TimeRangeSelector } from './TimeRangeSelector';
 
 interface Props {
@@ -84,15 +84,9 @@ export function PeriodPnLCard({
   // Subscription cost for the selected range (monthly fee × months in range, capped to 1 for short ranges)
   const monthsInRange = (() => {
     if (range.preset === 'allTime') {
-      // Approximate: span from earliest daily activity to now in months
-      if (!dailyActivity.length) return 1;
-      const sorted = [...dailyActivity].sort((a, b) => a.date.localeCompare(b.date));
-      const first = new Date(sorted[0].date);
-      const now = new Date();
-      const m =
-        (now.getFullYear() - first.getFullYear()) * 12 +
-        (now.getMonth() - first.getMonth()) + 1;
-      return Math.max(1, m);
+      // Anchored to your $200/mo plan start (May 30, 2025) rather than the first
+      // recorded session, so "all time" spans the full life of the subscription.
+      return subscriptionMonthsElapsed();
     }
     if (range.preset === 'thisMonth') return 1;
     // Rolling presets: rough fraction of a 30-day month
@@ -101,6 +95,12 @@ export function PeriodPnLCard({
     const days = Math.max(1, (end - start) / (24 * 60 * 60 * 1000));
     return Math.max(0.25, days / 30);
   })();
+
+  // Whole months render without a trailing ".0"; fractional rolling-window
+  // months keep one (or two, sub-month) decimals.
+  const monthsLabel = Number.isInteger(monthsInRange)
+    ? String(monthsInRange)
+    : monthsInRange.toFixed(monthsInRange < 1 ? 2 : 1);
 
   const subTotal = subscriptionCost * monthsInRange;
   const netValue = apiCost - subTotal;
@@ -127,7 +127,8 @@ export function PeriodPnLCard({
           </h3>
           <p className="text-xs text-slate-500">
             {subscriptionLabel}
-            {monthsInRange !== 1 && ` · ${monthsInRange.toFixed(monthsInRange < 1 ? 2 : 1)} mo`}
+            {monthsInRange !== 1 && ` · ${monthsLabel} mo`}
+            {range.preset === 'allTime' && ' · since May 30, 2025'}
           </p>
         </div>
         <TimeRangeSelector value={range} onChange={onChangeRange} />
@@ -194,7 +195,7 @@ export function PeriodPnLCard({
           <p className="mt-0.5 text-[10px] text-slate-500">
             {monthsInRange === 1
               ? `${formatCost(subscriptionCost)}/mo subscription`
-              : `${formatCost(subscriptionCost)}/mo × ${monthsInRange.toFixed(monthsInRange < 1 ? 2 : 1)}`}
+              : `${formatCost(subscriptionCost)}/mo × ${monthsLabel}`}
           </p>
         </div>
       </div>

@@ -139,7 +139,10 @@ export function formatMonthLabel(month: string): string {
 
 /**
  * Estimate how many full (or partial) billing months have elapsed since
- * the user's first session. Used to compute total subscription revenue paid.
+ * the user's first session. Kept as a general helper; subscription-revenue
+ * math is anchored to {@link SUBSCRIPTION_START_DATE} via
+ * {@link subscriptionMonthsElapsed} instead, so the P&L reflects the real
+ * subscription rather than when local usage data happens to start.
  */
 export function monthsActive(firstSessionDate: string | null): number {
   if (!firstSessionDate) return 1;
@@ -153,18 +156,43 @@ export function monthsActive(firstSessionDate: string | null): number {
 }
 
 /**
+ * The date you upgraded to the $200/mo Max 20× plan. All subscription-duration
+ * math is anchored here rather than the first recorded session, so the P&L
+ * reflects your real subscription rather than when local usage data starts.
+ * Hardcoded by request — change this if your plan began on a different date.
+ */
+export const SUBSCRIPTION_START_DATE = '2025-05-30T00:00:00';
+
+/**
+ * Whole months of subscription service elapsed since {@link SUBSCRIPTION_START_DATE},
+ * floored at 1. A month is only counted once its day-of-month anchor is
+ * reached, so the one-year anniversary returns 12 — today's fresh renewal pays
+ * for the upcoming (not-yet-consumed) month and is excluded.
+ */
+export function subscriptionMonthsElapsed(now: Date = new Date()): number {
+  const start = new Date(SUBSCRIPTION_START_DATE);
+  let months =
+    (now.getFullYear() - start.getFullYear()) * 12 +
+    (now.getMonth() - start.getMonth());
+  if (now.getDate() < start.getDate()) months -= 1;
+  return Math.max(1, months);
+}
+
+/**
  * From Anthropic's perspective:
- *   revenue     = subscriptionCost × monthsActive
+ *   revenue     = subscriptionCost × subscriptionMonthsElapsed
  *   cost        = totalApiCost (approximate compute cost to serve you)
- *   designCost  = claudeDesignMonthlyCost × monthsActive (cost to deliver the
- *                 Claude Design feature, tracked as its own line item)
+ *   designCost  = claudeDesignMonthlyCost × subscriptionMonthsElapsed (cost to
+ *                 deliver the Claude Design feature, tracked as its own line item)
  *   profit      = revenue − cost − designCost
  *                 (positive = Anthropic gains, negative = Anthropic loses)
+ *
+ * Months are counted from {@link SUBSCRIPTION_START_DATE}, not the first
+ * recorded session.
  */
 export function anthropicPnL(
   subscriptionCost: SubscriptionTier,
   totalApiCost: number,
-  firstSessionDate: string | null,
   claudeDesignMonthlyCost = 0
 ): {
   revenue: number;
@@ -173,7 +201,7 @@ export function anthropicPnL(
   profit: number;
   months: number;
 } {
-  const months = monthsActive(firstSessionDate);
+  const months = subscriptionMonthsElapsed();
   const revenue = subscriptionCost * months;
   const cost = totalApiCost;
   const designCost = claudeDesignMonthlyCost * months;

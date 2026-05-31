@@ -18,7 +18,7 @@ const OPTIONS: Option[] = [
   { preset: 'last7', label: 'Last 7 days', hint: 'Rolling week' },
   { preset: 'last30', label: 'Last 30 days', hint: 'Rolling month' },
   { preset: 'last90', label: 'Last 90 days', hint: 'Rolling quarter' },
-  { preset: 'allTime', label: 'All time', hint: 'Every recorded session' },
+  { preset: 'allTime', label: 'All time', hint: 'Since your plan started · May 30, 2025' },
 ];
 
 export function TimeRangeSelector({ value, onChange }: Props) {

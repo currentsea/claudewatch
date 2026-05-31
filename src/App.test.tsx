@@ -268,21 +268,23 @@ it('renders the data disclaimer on the dashboard', async () => {
 
 // ── Period P&L card + time range selector ─────────────────────────────────────
 
-it('renders the period P&L card with a time range selector defaulting to current month', async () => {
+it('renders the period P&L card defaulting to the all-time (since-subscription) view', async () => {
   render(<App />);
   await screen.findByRole('heading', { name: /ClaudeWatch/i });
-  expect(screen.getByTestId('time-range-selector')).toBeInTheDocument();
+  const selector = screen.getByTestId('time-range-selector');
+  expect(selector).toBeInTheDocument();
+  expect(selector).toHaveTextContent(/All time/i);
   expect(screen.getByTestId('pnl-headline')).toBeInTheDocument();
 });
 
-it('lets the user switch the P&L time range to all-time', async () => {
+it('lets the user switch the P&L time range away from the all-time default', async () => {
   render(<App />);
   await screen.findByRole('heading', { name: /ClaudeWatch/i });
   fireEvent.click(screen.getByTestId('time-range-selector'));
-  fireEvent.click(await screen.findByTestId('time-range-allTime'));
+  fireEvent.click(await screen.findByTestId('time-range-thisMonth'));
   await waitFor(() => {
-    // The chosen label propagates to both the selector button and the card title
-    expect(screen.getAllByText(/All time/i).length).toBeGreaterThan(0);
+    // "This month" resolves to a month/year label (e.g. "May 2026"), not "All time"
+    expect(screen.getByTestId('time-range-selector')).not.toHaveTextContent(/All time/i);
   });
 });
 

@@ -7,7 +7,6 @@ interface Props {
   subscriptionCost: SubscriptionTier;
   totalApiCost: number;
   currentPeriodCost: number;
-  firstSessionDate: string | null;
   subscriptionLabel: string;
   billingPeriodStart?: string;
 }
@@ -108,8 +107,8 @@ function PnlExplainer({
 
         <p className="text-slate-500">
           Period: <strong className="text-slate-400">all-time</strong> since
-          your first recorded session — per-month splits are intentionally omitted
-          because they're too noisy to be useful.
+          your $200/mo plan started (May 30, 2025) — per-month splits are
+          intentionally omitted because they're too noisy to be useful.
         </p>
 
         <p className="text-slate-500">
@@ -154,15 +153,13 @@ function PnlExplainer({
 export function SubsidyHero({
   subscriptionCost,
   totalApiCost,
-  firstSessionDate,
   subscriptionLabel,
 }: Props) {
   const [showPnlExplainer, setShowPnlExplainer] = useState(false);
 
   const { revenue, cost, profit, months } = anthropicPnL(
     subscriptionCost,
-    totalApiCost,
-    firstSessionDate
+    totalApiCost
   );
 
   const subsidy = Math.max(0, cost - revenue);

@@ -238,7 +238,10 @@ export default function App() {
   const [provider, setProvider] = useState<Provider>('claude');
   const [drilldownSessionId, setDrilldownSessionId] = useState<string | null>(null);
   const [theme, setTheme] = useState<'dark' | 'light'>(loadTheme);
-  const [timeRange, setTimeRange] = useState<TimeRange>(() => buildTimeRange('thisMonth'));
+  // Default to the all-time (since-subscription) view so the headline reflects
+  // the full life of the $200/mo plan (anchored to May 30, 2025), not just the
+  // current calendar month.
+  const [timeRange, setTimeRange] = useState<TimeRange>(() => buildTimeRange('allTime'));
 
   useEffect(() => {
     saveTheme(theme);
@@ -278,7 +281,6 @@ export default function App() {
   );
   const totalApiCost = completedApiCost + activeSessionsCost;
   const currentPeriodCost = data?.computedCosts.currentPeriodCost ?? 0;
-  const firstSessionDate = data?.totalStats.firstSessionDate ?? null;
 
   const firstDate = data?.totalStats.firstSessionDate
     ? new Date(data.totalStats.firstSessionDate).toLocaleDateString('en-US', {
@@ -619,14 +621,12 @@ export default function App() {
                     subscriptionCost={subscriptionCost}
                     totalApiCost={totalApiCost}
                     currentPeriodCost={currentPeriodCost}
-                    firstSessionDate={firstSessionDate}
                     subscriptionLabel={`${sub.label} (${formatCost(subscriptionCost)}/mo)`}
                     billingPeriodStart={data.billingPeriodStart}
                   />
                   <AnthropicPnL
                     subscriptionCost={subscriptionCost}
                     totalApiCost={totalApiCost}
-                    firstSessionDate={firstSessionDate}
                     claudeDesignMonthlyCost={pricingSettings.claudeDesignMonthlyCost}
                   />
                 </div>
