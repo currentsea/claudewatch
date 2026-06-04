@@ -45,6 +45,7 @@ import { AggregatesDashboard } from './components/AggregatesDashboard';
 import { ProviderSelector, Provider } from './components/ProviderSelector';
 import { ComingSoonProvider } from './components/ComingSoonProvider';
 import { SessionActivityChart } from './components/SessionActivityChart';
+import { BurnRateChart } from './components/BurnRateChart';
 import { NoDataInstall } from './components/NoDataInstall';
 
 type Page = 'dashboard' | 'aggregates' | 'settings' | 'donate' | 'about';
@@ -555,6 +556,25 @@ export default function App() {
                 {/* ── Disclaimer ───────────────────────────────────────────────── */}
                 <div className="mb-6">
                   <DisclaimerBanner />
+                </div>
+
+                {/* ── Burn Rate (net winner / loser, day by day) ───────────────── */}
+                <div className="mb-4 flex items-center gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                    Burn Rate
+                  </span>
+                  <div className="flex-1 border-t border-slate-700/60" />
+                  <span className={`text-xs font-medium ${sub.color}`}>
+                    {sub.label} · {formatCost(subscriptionCost)}/mo
+                  </span>
+                </div>
+
+                <div className="mb-6">
+                  <BurnRateChart
+                    dailyActivity={data.dailyActivity}
+                    subscriptionCost={subscriptionCost}
+                    subscriptionLabel={`${sub.label} (${formatCost(subscriptionCost)}/mo)`}
+                  />
                 </div>
 
                 <div className="mb-6">

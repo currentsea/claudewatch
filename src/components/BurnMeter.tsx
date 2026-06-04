@@ -37,7 +37,7 @@ export function BurnMeter({
     <div className="rounded-2xl border border-slate-700/60 bg-black/10 p-5 backdrop-blur-sm">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-white">Burn Rate</h3>
+          <h3 className="text-sm font-semibold text-white">Monthly Projection</h3>
           <p className="text-xs text-slate-500">
             Current billing period — day {daysElapsed} of ~{daysInMonth}
           </p>
