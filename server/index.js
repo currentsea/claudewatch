@@ -66,7 +66,16 @@ loadDotEnv();
 // ── Config ────────────────────────────────────────────────────────────────────
 const CLAUDE_DATA_PATH =
   process.env.CLAUDE_DATA_PATH || path.join(os.homedir(), '.claude');
-const BILLING_DAY = parseInt(process.env.BILLING_DAY || '30', 10);
+const BILLING_DAY = (() => {
+  const d = parseInt(process.env.BILLING_DAY || '30', 10);
+  if (!Number.isInteger(d) || d < 1 || d > 31) {
+    console.warn(
+      `Invalid BILLING_DAY="${process.env.BILLING_DAY}" (must be 1-31) — falling back to 30`
+    );
+    return 30;
+  }
+  return d;
+})();
 
 // Demo mode: defaults to ON (the value committed in .env). When enabled, all
 // sessions and statistics dated before DEMO_CUTOFF_DAY are ignored everywhere.
@@ -286,8 +295,13 @@ function parseSession(filePath, { collectMessages = false } = {}) {
       } catch {}
     }
 
-    // Compute cost per model
+    // Compute cost per model. Skip Claude Code's synthetic/internal model
+    // (id starts with "<"): it carries no real API cost, matching the filter in
+    // aggregateModelUsage (pricing.js) and the stats-cache generator. Without
+    // this, session.estimatedCost is inflated and priced as Sonnet (the
+    // getModelTier default), diverging from the all-time figures.
     for (const [model, tokens] of Object.entries(session.models)) {
+      if (model.startsWith('<')) continue;
       session.estimatedCost += computeTokenCost(tokens, model);
     }
   } catch {}
@@ -365,6 +379,10 @@ app.get('/api/usage', (req, res) => {
       const day = asOf.substring(0, 10);  // "2026-05-25"
 
       for (const [model, tokens] of Object.entries(session.models)) {
+        // Synthetic/internal model (id starts with "<") carries no real cost —
+        // skip so per-session cost and the persisted DB aggregates stay
+        // consistent with aggregateModelUsage / the stats-cache.
+        if (model.startsWith('<')) continue;
         const liveCost = computeTokenCost(tokens, model, effectivePricing);
         session.estimatedCost += liveCost;
 
@@ -614,6 +632,7 @@ app.get('/api/sessions/:id', (req, res) => {
     // Recompute estimatedCost using effective pricing
     session.estimatedCost = 0;
     for (const [model, tokens] of Object.entries(session.models)) {
+      if (model.startsWith('<')) continue; // synthetic model — no real cost
       session.estimatedCost += computeTokenCost(tokens, model, effectivePricing);
     }
     res.json(session);
@@ -663,12 +682,21 @@ app.get('/api/price-history', (_req, res) => {
  */
 app.post('/api/price-history', (req, res) => {
   const { tier, dimension, rate, effectiveFrom, source } = req.body || {};
+  // effectiveFrom must be a real date string (YYYY-MM-DD or full ISO). Only
+  // checking truthiness let malformed strings persist and silently break the
+  // lexicographic `<=` date comparison in rateAt → wrong historical rates.
+  const effectiveFromOk =
+    typeof effectiveFrom === 'string' &&
+    /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z?)?$/.test(effectiveFrom) &&
+    !Number.isNaN(Date.parse(effectiveFrom));
   if (
     !['opus', 'sonnet', 'haiku'].includes(tier) ||
     !['input', 'output', 'cacheCreation', 'cacheRead'].includes(dimension) ||
     typeof rate !== 'number' ||
+    !Number.isFinite(rate) ||
     rate < 0 ||
-    !effectiveFrom
+    rate > 1000 || // sanity ceiling: highest real list rate is ~$75/MTok
+    !effectiveFromOk
   ) {
     return res.status(400).json({ error: 'Invalid price-history entry' });
   }

@@ -18,7 +18,8 @@ interface Props {
  *   └─────────────────┘                            ↓
  *                          Σ across all models  =  Total compute $
  *                                                  ↓
- *               Subscription paid  −  Total compute $  =  Anthropic P&L
+ *               Total compute $  −  Subscription paid  =  Net value to you
+ *               (positive = your usage exceeds what you paid → subscription wins)
  */
 export function CostFlowDiagram({ data, subscriptionCost }: Props) {
   const { totalStats, computedCosts, modelPricing } = data;

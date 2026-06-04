@@ -52,14 +52,19 @@ function resolveEffectivePricing(overrides) {
 }
 
 function computeTokenCost(tokens, modelId, pricing) {
+  if (!tokens || typeof tokens !== 'object') return 0;
   const tier = getModelTier(modelId);
   const p = (pricing || MODEL_PRICING)[tier];
+  if (!p) return 0; // unknown tier / malformed override — never NaN-poison totals
   const M = 1_000_000;
+  // Clamp each bucket to a finite, non-negative count so a bad value can't
+  // produce a negative or NaN cost that silently corrupts downstream sums.
+  const nn = (n) => (Number.isFinite(n) && n > 0 ? n : 0);
   return (
-    ((tokens.inputTokens || 0) / M) * p.input +
-    ((tokens.outputTokens || 0) / M) * p.output +
-    ((tokens.cacheCreationInputTokens || 0) / M) * p.cacheCreation +
-    ((tokens.cacheReadInputTokens || 0) / M) * p.cacheRead
+    (nn(tokens.inputTokens) / M) * p.input +
+    (nn(tokens.outputTokens) / M) * p.output +
+    (nn(tokens.cacheCreationInputTokens) / M) * p.cacheCreation +
+    (nn(tokens.cacheReadInputTokens) / M) * p.cacheRead
   );
 }
 
