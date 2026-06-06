@@ -14,7 +14,6 @@ import {
   Globe,
   Sun,
   Moon,
-  Info,
   Wrench,
   Cpu,
   Database,
@@ -24,7 +23,6 @@ import {
 import { useUsageData } from './hooks/useUsageData';
 import { PricingSettings, SubscriptionTier } from './types';
 import {
-  formatCost,
   buildSubscriptionTiers,
   loadPricingSettings,
   savePricingSettings,
@@ -32,12 +30,9 @@ import {
 
 import { BurnMeter } from './components/BurnMeter';
 import { SubscriptionSelector } from './components/SubscriptionSelector';
-import { AnthropicPnL } from './components/AnthropicPnL';
 import { PricingSettingsPanel } from './components/PricingSettingsPanel';
 import { SessionsTable } from './components/SessionsTable';
-import { SubsidyHero } from './components/SubsidyHero';
 import { CostFlowDiagram } from './components/CostFlowDiagram';
-import { ActiveSessionsPanel } from './components/ActiveSessionsPanel';
 import { SessionDrilldownModal } from './components/SessionDrilldownModal';
 import { DonatePage } from './components/DonatePage';
 import { LandingPage } from './components/LandingPage';
@@ -45,7 +40,6 @@ import { AggregatesDashboard } from './components/AggregatesDashboard';
 import { ProviderSelector, Provider } from './components/ProviderSelector';
 import { ComingSoonProvider } from './components/ComingSoonProvider';
 import { SessionActivityChart } from './components/SessionActivityChart';
-import { BurnRateChart } from './components/BurnRateChart';
 import { NoDataInstall } from './components/NoDataInstall';
 
 type Page = 'dashboard' | 'aggregates' | 'settings' | 'donate' | 'about';
@@ -111,36 +105,6 @@ function ErrorBanner({ message, onRetry }: { message: string; onRetry: () => voi
       >
         <RefreshCw size={14} /> Retry
       </button>
-    </div>
-  );
-}
-
-// ── Disclaimer banner ─────────────────────────────────────────────────────────
-function DisclaimerBanner() {
-  return (
-    <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-xs text-amber-200/70 leading-relaxed">
-      <div className="flex gap-2">
-        <Info size={13} className="mt-0.5 shrink-0 text-amber-400/70" />
-        <p>
-          <strong className="text-amber-300/80">Data disclaimer:</strong>{' '}
-          ClaudeWatch provides cost estimates for informational purposes only. All figures
-          are derived from local session files and publicly available API pricing, and may
-          not reflect your actual billing. Anthropic's true compute costs differ from
-          published API list prices. We take no responsibility for the accuracy of the data
-          presented. All information is provided on an as-is basis. It is ultimately the
-          end user's responsibility to validate their cost–benefit analysis when using AI
-          assistance tools.{' '}
-          <a
-            href="https://www.anthropic.com/pricing"
-            target="_blank"
-            rel="noreferrer"
-            className="underline underline-offset-2 hover:text-amber-200"
-          >
-            Verify rates at anthropic.com/pricing
-          </a>
-          .
-        </p>
-      </div>
     </div>
   );
 }
@@ -259,7 +223,6 @@ export default function App() {
   const [subscriptionCost, setSubscriptionCost] = useState<SubscriptionTier>(
     pricingSettings.subscriptionTiers.max20x
   );
-  const sub = tiers.find((t) => t.value === subscriptionCost) ?? tiers[0];
 
   const {
     data,
@@ -273,13 +236,6 @@ export default function App() {
   if (loading && !data) return <Loader />;
 
   // ── Derived metrics ───────────────────────────────────────────────────────
-  const completedApiCost = data?.computedCosts.totalApiCost ?? 0;
-  // Add in-flight active session costs so the all-time totals stay current.
-  const activeSessionsCost = (data?.activeSessions ?? []).reduce(
-    (sum, s) => sum + (s.estimatedCost ?? 0),
-    0
-  );
-  const totalApiCost = completedApiCost + activeSessionsCost;
   const currentPeriodCost = data?.computedCosts.currentPeriodCost ?? 0;
 
   const firstDate = data?.totalStats.firstSessionDate
@@ -555,61 +511,6 @@ export default function App() {
 
             {data && (
               <>
-                {/* ── Disclaimer ───────────────────────────────────────────────── */}
-                <div className="mb-6">
-                  <DisclaimerBanner />
-                </div>
-
-                {/* ── Burn Rate (net winner / loser, day by day) ───────────────── */}
-                <div className="mb-4 flex items-center gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                    Burn Rate
-                  </span>
-                  <div className="flex-1 border-t border-slate-700/60" />
-                  <span className={`text-xs font-medium ${sub.color}`}>
-                    {sub.label} · {formatCost(subscriptionCost)}/mo
-                  </span>
-                </div>
-
-                <div className="mb-6">
-                  <BurnRateChart
-                    dailyActivity={data.dailyActivity}
-                    subscriptionCost={subscriptionCost}
-                    subscriptionLabel={`${sub.label} (${formatCost(subscriptionCost)}/mo)`}
-                  />
-                </div>
-
-                {/* ── All-time Anthropic perspective (the headline subsidy story) ─ */}
-                <div className="mb-4 flex items-center gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                    All-time Anthropic perspective
-                  </span>
-                  <div className="flex-1 border-t border-slate-700/60" />
-                </div>
-
-                <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                  <SubsidyHero
-                    subscriptionCost={subscriptionCost}
-                    totalApiCost={totalApiCost}
-                    currentPeriodCost={currentPeriodCost}
-                    subscriptionLabel={`${sub.label} (${formatCost(subscriptionCost)}/mo)`}
-                    billingPeriodStart={data.billingPeriodStart}
-                  />
-                  <AnthropicPnL
-                    subscriptionCost={subscriptionCost}
-                    totalApiCost={totalApiCost}
-                    claudeDesignMonthlyCost={pricingSettings.claudeDesignMonthlyCost}
-                  />
-                </div>
-
-                {/* ── Active usage windows (live) ──────────────────────────────── */}
-                <div className="mb-6">
-                  <ActiveSessionsPanel
-                    activeSessions={data.activeSessions || []}
-                    onSelectSession={(id) => setDrilldownSessionId(id)}
-                  />
-                </div>
-
                 {/* ── Session activity ─────────────────────────────────────────── */}
                 <div className="mb-4 flex items-center gap-2">
                   <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
