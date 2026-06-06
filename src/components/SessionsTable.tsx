@@ -141,6 +141,19 @@ export function SessionsTable({ sessions, subscriptionCost, onSelectSession }: P
       sortDir === 'desc' ? <ChevronDown size={12} /> : <ChevronUp size={12} />
     ) : null;
 
+  // Keyboard parity for the click-to-sort headers (Enter / Space).
+  const sortKeyHandler =
+    (col: 'date' | 'cost' | 'tokens' | 'subcost') =>
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        handleSort(col);
+      }
+    };
+
+  const ariaSort = (col: 'date' | 'cost' | 'tokens' | 'subcost') =>
+    sortBy === col ? (sortDir === 'desc' ? 'descending' : 'ascending') : 'none';
+
   // Whether the subscriber comes out ahead on the visible sessions
   const subscriberAheadOnVisible = totalSessionApiCost >= subscriptionCost;
 
@@ -224,23 +237,32 @@ export function SessionsTable({ sessions, subscriptionCost, onSelectSession }: P
             <tr className="border-b border-slate-700/60 text-left">
               <th className="px-5 py-3 text-xs font-medium text-slate-400">Project</th>
               <th
-                className="px-4 py-3 text-xs font-medium text-slate-400 cursor-pointer hover:text-white select-none"
+                className="px-4 py-3 text-xs font-medium text-slate-400 cursor-pointer hover:text-white select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/50"
                 onClick={() => handleSort('date')}
+                onKeyDown={sortKeyHandler('date')}
+                tabIndex={0}
+                aria-sort={ariaSort('date')}
               >
                 <span className="flex items-center gap-1">Date <SortIcon col="date" /></span>
               </th>
               <th className="px-4 py-3 text-xs font-medium text-slate-400">Model</th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-400">Msgs</th>
+              <th className="hidden px-4 py-3 text-xs font-medium text-slate-400 md:table-cell">Msgs</th>
               <th
-                className="px-4 py-3 text-xs font-medium text-slate-400 cursor-pointer hover:text-white select-none"
+                className="px-4 py-3 text-xs font-medium text-slate-400 cursor-pointer hover:text-white select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/50"
                 onClick={() => handleSort('tokens')}
+                onKeyDown={sortKeyHandler('tokens')}
+                tabIndex={0}
+                aria-sort={ariaSort('tokens')}
               >
                 <span className="flex items-center gap-1">Tokens <SortIcon col="tokens" /></span>
               </th>
-              <th className="px-4 py-3 text-xs font-medium text-slate-400">Cache %</th>
+              <th className="hidden px-4 py-3 text-xs font-medium text-slate-400 md:table-cell">Cache %</th>
               <th
-                className="px-4 py-3 text-xs font-medium text-amber-400 cursor-pointer hover:text-white select-none"
+                className="px-4 py-3 text-xs font-medium text-amber-400 cursor-pointer hover:text-white select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/50"
                 onClick={() => handleSort('cost')}
+                onKeyDown={sortKeyHandler('cost')}
+                tabIndex={0}
+                aria-sort={ariaSort('cost')}
                 title="API list price — Anthropic's approx. compute expense"
               >
                 <span className="flex items-center gap-1">
@@ -250,8 +272,11 @@ export function SessionsTable({ sessions, subscriptionCost, onSelectSession }: P
                 </span>
               </th>
               <th
-                className="px-4 py-3 text-xs font-medium text-blue-400 cursor-pointer hover:text-white select-none"
+                className="px-4 py-3 text-xs font-medium text-blue-400 cursor-pointer hover:text-white select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/50"
                 onClick={() => handleSort('subcost')}
+                onKeyDown={sortKeyHandler('subcost')}
+                tabIndex={0}
+                aria-sort={ariaSort('subcost')}
                 title="Your subscription cost attributed to this session"
               >
                 <span className="flex items-center gap-1">
@@ -279,8 +304,20 @@ export function SessionsTable({ sessions, subscriptionCost, onSelectSession }: P
                 <tr
                   key={session.sessionId}
                   onClick={() => onSelectSession?.(session.sessionId)}
+                  onKeyDown={
+                    onSelectSession
+                      ? (e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            onSelectSession(session.sessionId);
+                          }
+                        }
+                      : undefined
+                  }
+                  role={onSelectSession ? 'button' : undefined}
+                  tabIndex={onSelectSession ? 0 : undefined}
                   title={onSelectSession ? 'Click for drilldown' : undefined}
-                  className={`border-b border-slate-700/30 transition-colors hover:bg-slate-700/20 ${
+                  className={`border-b border-slate-700/30 transition-colors hover:bg-slate-700/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/50 ${
                     onSelectSession ? 'cursor-pointer' : ''
                   } ${i % 2 === 0 ? '' : 'bg-black/20'}`}
                 >
@@ -316,7 +353,7 @@ export function SessionsTable({ sessions, subscriptionCost, onSelectSession }: P
                   </td>
 
                   {/* Messages */}
-                  <td className="px-4 py-3 text-xs text-slate-300">{session.messageCount}</td>
+                  <td className="hidden px-4 py-3 text-xs text-slate-300 md:table-cell">{session.messageCount}</td>
 
                   {/* Tokens */}
                   <td className="px-4 py-3 text-xs font-medium text-white">
@@ -324,7 +361,7 @@ export function SessionsTable({ sessions, subscriptionCost, onSelectSession }: P
                   </td>
 
                   {/* Cache hit rate */}
-                  <td className="px-4 py-3">
+                  <td className="hidden px-4 py-3 md:table-cell">
                     <div className="flex items-center gap-1.5">
                       <div className="h-1.5 w-14 overflow-hidden rounded-full bg-slate-700">
                         <div

@@ -498,7 +498,7 @@ export function PricingSettingsPanel({ settings, onChange }: Props) {
         </div>
 
         <p className="text-xs text-slate-600">
-          Defaults verified May 2026 against{' '}
+          Defaults verified June 2026 against{' '}
           <a
             href="https://docs.anthropic.com/en/docs/about-claude/pricing"
             target="_blank"

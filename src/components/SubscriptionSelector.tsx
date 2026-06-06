@@ -25,7 +25,7 @@ export function SubscriptionSelector({ value, onChange, tiers }: Props) {
           <button
             key={tier.label}
             onClick={() => onChange(tier.value)}
-            className={`flex flex-col items-center rounded-lg px-3 py-2 transition-all duration-200 min-w-[72px] ${
+            className={`flex flex-col items-center rounded-lg px-3 py-2 transition-all duration-200 min-w-[72px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 focus-visible:ring-blue-500/50 ${
               isActive
                 ? `${tier.bg} ${tier.border} border ${tier.color}`
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/40 border border-transparent'

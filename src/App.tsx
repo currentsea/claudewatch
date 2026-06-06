@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
-  Eye,
+  Flame,
   RefreshCw,
   Activity,
   Clock,
@@ -82,7 +82,7 @@ function Loader() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-900">
       <div className="text-center">
-        <Eye size={48} className="mx-auto mb-4 animate-pulse text-emerald-400" />
+        <Flame size={48} className="mx-auto mb-4 animate-pulse text-orange-400" />
         <p className="text-lg font-semibold text-white">Loading usage data…</p>
         <p className="mt-1 text-sm text-slate-400">Reading Claude session files</p>
       </div>
@@ -152,7 +152,9 @@ function ToolsInfoPanel() {
     <div className="rounded-2xl border border-slate-700/60 bg-black/10 p-5 backdrop-blur-sm">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between text-left"
+        className="flex w-full items-center justify-between text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 rounded-lg"
+        aria-expanded={open}
+        aria-controls="tools-mcp-panel"
       >
         <div className="flex items-center gap-2">
           <Wrench size={14} className="text-cyan-400" />
@@ -164,7 +166,7 @@ function ToolsInfoPanel() {
       </button>
 
       {open && (
-        <div className="mt-4 space-y-4">
+        <div id="tools-mcp-panel" className="mt-4 space-y-4">
           <p className="text-xs text-slate-400 leading-relaxed">
             ClaudeWatch reads your Claude session files which contain tool-use records. Below
             is a breakdown of what types of tool calls are tracked in your usage data. MCP
@@ -310,8 +312,8 @@ export default function App() {
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
           {/* Logo */}
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-cyan-600 shadow-lg shadow-emerald-500/20">
-              <Eye size={20} className="text-white" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-red-600 shadow-lg shadow-orange-500/20">
+              <Flame size={20} className="text-white" />
             </div>
             <div>
               <h1 className="text-base font-bold text-white leading-none">
@@ -402,7 +404,7 @@ export default function App() {
 
             <button
               onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
-              className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300 hover:border-slate-600 hover:text-white transition-all"
+              className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs text-slate-300 hover:border-slate-600 hover:text-white transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
               aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
               data-testid="theme-toggle"
             >
@@ -434,7 +436,7 @@ export default function App() {
               <button
                 onClick={refresh}
                 disabled={loading}
-                className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 hover:border-slate-600 hover:text-white transition-all disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs text-slate-300 hover:border-slate-600 hover:text-white transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 disabled:opacity-50"
               >
                 <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
                 Refresh
@@ -577,6 +579,30 @@ export default function App() {
                   />
                 </div>
 
+                {/* ── All-time Anthropic perspective (the headline subsidy story) ─ */}
+                <div className="mb-4 flex items-center gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
+                    All-time Anthropic perspective
+                  </span>
+                  <div className="flex-1 border-t border-slate-700/60" />
+                </div>
+
+                <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  <SubsidyHero
+                    subscriptionCost={subscriptionCost}
+                    totalApiCost={totalApiCost}
+                    currentPeriodCost={currentPeriodCost}
+                    subscriptionLabel={`${sub.label} (${formatCost(subscriptionCost)}/mo)`}
+                    billingPeriodStart={data.billingPeriodStart}
+                  />
+                  <AnthropicPnL
+                    subscriptionCost={subscriptionCost}
+                    totalApiCost={totalApiCost}
+                    claudeDesignMonthlyCost={pricingSettings.claudeDesignMonthlyCost}
+                  />
+                </div>
+
+                {/* ── Active usage windows (live) ──────────────────────────────── */}
                 <div className="mb-6">
                   <ActiveSessionsPanel
                     activeSessions={data.activeSessions || []}
@@ -605,29 +631,6 @@ export default function App() {
                   />
                 </div>
 
-                {/* ── All-time Anthropic perspective (no monthly figures) ──────── */}
-                <div className="mb-4 flex items-center gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                    All-time Anthropic perspective
-                  </span>
-                  <div className="flex-1 border-t border-slate-700/60" />
-                </div>
-
-                <div className="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                  <SubsidyHero
-                    subscriptionCost={subscriptionCost}
-                    totalApiCost={totalApiCost}
-                    currentPeriodCost={currentPeriodCost}
-                    subscriptionLabel={`${sub.label} (${formatCost(subscriptionCost)}/mo)`}
-                    billingPeriodStart={data.billingPeriodStart}
-                  />
-                  <AnthropicPnL
-                    subscriptionCost={subscriptionCost}
-                    totalApiCost={totalApiCost}
-                    claudeDesignMonthlyCost={pricingSettings.claudeDesignMonthlyCost}
-                  />
-                </div>
-
                 {/* ── How we get the numbers ───────────────────────────────────── */}
                 <div className="mb-4 flex items-center gap-2">
                   <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
@@ -652,17 +655,7 @@ export default function App() {
                   <ToolsInfoPanel />
                 </div>
 
-                {/* ── Session P&L ──────────────────────────────────────────────── */}
-                <div className="mb-4 flex items-center gap-2">
-                  <span className="text-xs font-semibold uppercase tracking-widest text-slate-500">
-                    Session P&amp;L vs Subscription
-                  </span>
-                  <div className="flex-1 border-t border-slate-700/60" />
-                  <span className={`text-xs font-medium ${sub.color}`}>
-                    {sub.label} · {formatCost(subscriptionCost)}/mo
-                  </span>
-                </div>
-
+                {/* ── Session P&L (the table renders its own header + summary) ──── */}
                 <div className="mb-6">
                   <SessionsTable
                     sessions={data.sessions}

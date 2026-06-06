@@ -5,7 +5,7 @@
  *
  * Mirrors `src/utils/pricing.ts` defaults — both must stay in sync.
  * Latest models: Opus 4.8 (most capable), Sonnet 4.6 (balanced), Haiku 4.5 (fastest).
- * Source: https://docs.anthropic.com/en/docs/about-claude/pricing (May 2026)
+ * Source: https://docs.anthropic.com/en/docs/about-claude/pricing (June 2026)
  */
 
 const MODEL_PRICING = {

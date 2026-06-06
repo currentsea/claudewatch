@@ -1,4 +1,4 @@
-# 🔥 BurnItDown — Claude Usage Dashboard
+# 🔥 ClaudeWatch — Claude Usage Dashboard
 
 A local, real-time dashboard that reads your **Claude Code** session files
 (`~/.claude/projects/**/*.jsonl`), computes the dollar value of every token
@@ -15,7 +15,7 @@ Most heavy Claude Code users are net-negative for Anthropic on a unit-economics
 basis. This dashboard makes that subsidy visible — for one user, in their own
 data, in real time.
 
-![BurnItDown Dashboard](docs/screenshot-dashboard.png)
+![ClaudeWatch Dashboard](docs/screenshot-dashboard.png)
 
 ---
 
@@ -124,7 +124,7 @@ cost = (input_tokens          × input_rate        / 1 000 000)
      + (cache_read_tokens     × cache_read_rate   / 1 000 000)
 ```
 
-The model id (e.g. `claude-opus-4-7`, `claude-sonnet-4-6`) is mapped to the
+The model id (e.g. `claude-opus-4-8`, `claude-sonnet-4-6`) is mapped to the
 Opus / Sonnet / Haiku tier and the matching rate is used. The mapping is
 substring-based — any model id containing `opus` → opus, containing `haiku` →
 haiku, else → sonnet.
@@ -132,11 +132,11 @@ haiku, else → sonnet.
 > See the in-app **"How we get the numbers"** section for an interactive
 > flowchart of this calculation against your own data.
 
-### Default rates (USD per 1M tokens, May 2026)
+### Default rates (USD per 1M tokens, June 2026)
 
 | Model | Input | Output | 5m cache-write | Cache read |
 |---|---|---|---|---|
-| **Claude Opus 4.5+** (4.5, 4.6, 4.7) | $5 | $25 | $6.25 | $0.50 |
+| **Claude Opus 4.5+** (4.5, 4.6, 4.7, 4.8) | $5 | $25 | $6.25 | $0.50 |
 | **Claude Sonnet 4.5+** (4.5, 4.6) | $3 | $15 | $3.75 | $0.30 |
 | **Claude Haiku 4.5** | $1 | $5 | $1.25 | $0.10 |
 
@@ -335,7 +335,7 @@ The default rates are taken directly from Anthropic's public documentation.
 | **Claude.ai plans** | [claude.ai/upgrade](https://claude.ai/upgrade) | Flat-rate subscription costs: Pro $20/mo, Max 5× $100/mo, Max 20× $200/mo. |
 | **Prompt Caching** | [docs.anthropic.com/en/docs/build-with-claude/prompt-caching](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching) | 5m cache write = 1.25× input rate, cache read = 0.1× input rate. |
 
-> Defaults verified **May 2026**. If Anthropic changes rates, override in
+> Defaults verified **June 2026**. If Anthropic changes rates, override in
 > **Settings** — your changes persist in `localStorage` without needing a
 > code change.
 
@@ -417,6 +417,6 @@ claudewatch/
 © 2026 [Joseph Bull](https://github.com/currentsea). Repo:
 [github.com/currentsea/claudewatch](https://github.com/currentsea/claudewatch).
 
-BurnItDown is **not** affiliated with Anthropic. The cost numbers are
+ClaudeWatch is **not** affiliated with Anthropic. The cost numbers are
 estimates derived from Anthropic's publicly published API rates; they are
 not Anthropic's real margins.

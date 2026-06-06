@@ -167,7 +167,11 @@ body:has(.light-mode) {
 /* ── Interactive hover states ───────────────────────────────────────────── */
 .light-mode .hover\:bg-slate-800:hover         { background-color: #f1f5f9 !important; }
 .light-mode .hover\:bg-slate-700\/20:hover     { background-color: #f1f5f9 !important; }
+.light-mode .hover\:bg-slate-700\/40:hover     { background-color: #e2e8f0 !important; }
+.light-mode .hover\:bg-slate-700\/60:hover     { background-color: #e2e8f0 !important; }
 .light-mode .hover\:border-slate-600:hover     { border-color: #94a3b8 !important; }
+/* brightness-110 over-brightens tinted chips on white — soften it instead */
+.light-mode .hover\:brightness-110:hover       { filter: brightness(0.97) !important; }
 .light-mode .hover\:border-slate-500:hover     { border-color: #64748b !important; }
 .light-mode .hover\:text-white:hover           { color: #0f172a !important; }
 .light-mode .hover\:text-slate-200:hover       { color: #1e293b !important; }
@@ -177,8 +181,8 @@ body:has(.light-mode) {
 /* ── Code blocks ────────────────────────────────────────────────────────── */
 .light-mode code,
 .light-mode code.rounded {
-  background-color: #f1f5f9 !important;
-  color: #334155 !important;
+  background-color: #e2e8f0 !important;
+  color: #1e293b !important;
 }
 
 /* ── Backdrop blur tweaks (sticky header) ───────────────────────────────── */

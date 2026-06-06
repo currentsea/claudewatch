@@ -87,7 +87,10 @@ export function ProviderSelector({ value, onChange }: Props) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         data-testid="provider-selector"
-        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all ${current.bg} ${current.border} ${current.color} hover:brightness-110`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls="provider-menu"
+        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-all ${current.bg} ${current.border} ${current.color} hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50`}
       >
         <CurrentIcon size={12} />
         {current.label}
@@ -95,7 +98,11 @@ export function ProviderSelector({ value, onChange }: Props) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-1.5 w-60 overflow-hidden rounded-xl border border-slate-700/60 bg-slate-900 shadow-2xl">
+        <div
+          id="provider-menu"
+          role="menu"
+          className="absolute right-0 top-full z-50 mt-1.5 w-56 max-w-[calc(100vw-1rem)] overflow-hidden rounded-xl border border-slate-700/60 bg-slate-900 shadow-2xl sm:w-60"
+        >
           <div className="border-b border-slate-700/60 px-3 py-2 text-[10px] uppercase tracking-widest text-slate-500">
             Choose provider
           </div>
@@ -107,12 +114,13 @@ export function ProviderSelector({ value, onChange }: Props) {
                 <li key={p.id}>
                   <button
                     type="button"
+                    role="menuitem"
                     onClick={() => {
                       onChange(p.id);
                       setOpen(false);
                     }}
                     data-testid={`provider-option-${p.id}`}
-                    className={`flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm transition-colors hover:bg-slate-800/60 ${
+                    className={`flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm transition-colors hover:bg-slate-800/60 focus-visible:outline-none focus-visible:bg-slate-800/60 ${
                       isActive ? 'bg-slate-800/50' : ''
                     }`}
                   >

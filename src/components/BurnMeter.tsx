@@ -15,8 +15,12 @@ export function BurnMeter({
   subscriptionCost,
 }: Props) {
   const projected = projectMonthly(currentPeriodCost, billingPeriodStart);
-  const pct = Math.min((currentPeriodCost / subscriptionCost) * 100, 100);
-  const isOverBudget = projected > subscriptionCost;
+  // Guard against a 0/undefined subscription cost so the bar never goes NaN/Infinity.
+  const pct =
+    subscriptionCost > 0
+      ? Math.min((currentPeriodCost / subscriptionCost) * 100, 100)
+      : 0;
+  const isOverBudget = subscriptionCost > 0 && projected > subscriptionCost;
 
   const start = new Date(billingPeriodStart);
   const now = new Date();

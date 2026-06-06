@@ -2,7 +2,7 @@ import { PricingSettings, SubscriptionTier } from '../types';
 
 // ── Default pricing constants ─────────────────────────────────────────────────
 
-// Defaults reflect current Anthropic API pricing as of May 2026.
+// Defaults reflect current Anthropic API pricing as of June 2026.
 // Latest models: Opus 4.8 (most capable), Sonnet 4.6 (balanced), Haiku 4.5 (fastest).
 // Opus 4.5–4.8 are $5/$25 per MTok (down from $15/$75 on Opus 4.1).
 // Sonnet 4.5/4.6 stay at $3/$15. Haiku 4.5 is $1/$5 (Haiku 3.5 was $0.80/$4).

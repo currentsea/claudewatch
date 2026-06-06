@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   X, Loader2, MessageSquare, User, Bot, Folder, GitBranch,
   DollarSign, Wrench, TrendingUp, TrendingDown, Info,
@@ -61,6 +61,14 @@ export function SessionDrilldownModal({
     return () => window.removeEventListener('keydown', h);
   }, [onClose]);
 
+  // Move focus into the dialog on open and restore it to the trigger on close.
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    closeBtnRef.current?.focus();
+    return () => previouslyFocused?.focus?.();
+  }, []);
+
   const total =
     (detail?.totalTokens.inputTokens ?? 0) +
     (detail?.totalTokens.outputTokens ?? 0) +
@@ -83,6 +91,7 @@ export function SessionDrilldownModal({
     <div
       role="dialog"
       aria-modal="true"
+      aria-labelledby="session-drilldown-title"
       className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={onClose}
     >
@@ -96,14 +105,18 @@ export function SessionDrilldownModal({
             <p className="text-xs uppercase tracking-widest text-slate-500">
               Session drilldown
             </p>
-            <h2 className="truncate text-base font-bold text-white">
+            <h2
+              id="session-drilldown-title"
+              className="truncate text-base font-bold text-white"
+            >
               {detail?.project || sessionId}
             </h2>
             <p className="font-mono text-xs text-slate-500">{sessionId}</p>
           </div>
           <button
+            ref={closeBtnRef}
             onClick={onClose}
-            className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+            className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
             aria-label="Close drilldown"
           >
             <X size={18} />
