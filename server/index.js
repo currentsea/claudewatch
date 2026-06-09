@@ -767,14 +767,42 @@ function buildActiveSessions(allSessions) {
   return active;
 }
 
+// ── Serve the built React app (production / single-process mode) ───────────────
+// In development the React dev server (port 3005) serves the UI and proxies
+// /api/* here. In production there is no dev server: a PaaS runs ONE process on
+// ONE $PORT, so this Express server must serve the compiled SPA *and* the API
+// from the same origin. Otherwise the browser's same-origin /api/* calls have no
+// backend to reach → "Could not connect to the API server". Registered after all
+// /api routes so it never shadows them.
+const BUILD_DIR = path.join(__dirname, '..', 'build');
+const INDEX_HTML = path.join(BUILD_DIR, 'index.html');
+const HAS_BUILD = fs.existsSync(INDEX_HTML);
+if (HAS_BUILD) {
+  app.use(express.static(BUILD_DIR));
+  // SPA fallback: any non-API GET that didn't match a static asset returns the
+  // app shell so client-side state/navigation works on deep links and reloads.
+  app.get(/^\/(?!api\/).*/, (_req, res) => res.sendFile(INDEX_HTML));
+}
+
 // ── Start ─────────────────────────────────────────────────────────────────────
-const PORT = process.env.SERVER_PORT || 3001;
-// Bind to loopback by default: the API exposes local ~/.claude session contents
-// (message previews, cwd, git branch), so it must not be reachable from the LAN.
-// Override with SERVER_HOST=0.0.0.0 only if you intentionally want remote access.
-const HOST = process.env.SERVER_HOST || '127.0.0.1';
+// A PaaS assigns the public port via $PORT; honor it first. SERVER_PORT stays as
+// the documented local override, then the historical 3001 default.
+const PORT = process.env.PORT || process.env.SERVER_PORT || 3001;
+// Bind to loopback by default so a local dev box does not expose ~/.claude
+// session contents (message previews, cwd, git branch) to the LAN. In a hosted
+// deployment the platform requires binding all interfaces, so default to 0.0.0.0
+// whenever $PORT (the PaaS contract) or NODE_ENV=production is set. SERVER_HOST
+// always wins if explicitly provided.
+const IS_HOSTED = !!process.env.PORT || process.env.NODE_ENV === 'production';
+const HOST =
+  process.env.SERVER_HOST || (IS_HOSTED ? '0.0.0.0' : '127.0.0.1');
 const server = app.listen(PORT, HOST, () => {
-  console.log(`👁  ClaudeWatch API server → http://localhost:${PORT}`);
+  console.log(`👁  ClaudeWatch server     → http://${HOST}:${PORT}`);
+  console.log(
+    `🖥  Web UI                 → ${
+      HAS_BUILD ? 'serving build/ (production)' : 'not built (run npm run build)'
+    }`
+  );
   console.log(`📁 Claude data path       → ${CLAUDE_DATA_PATH}`);
   console.log(`📅 Billing day of month   → ${BILLING_DAY}`);
   console.log(
