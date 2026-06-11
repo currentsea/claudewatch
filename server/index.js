@@ -92,7 +92,7 @@ const db = openDatabase(CLAUDE_DATA_PATH);
  * not yet recorded in price_history.
  */
 function pricingAt(isoDate) {
-  const tiers = ['opus', 'sonnet', 'haiku'];
+  const tiers = ['fable', 'opus', 'sonnet', 'haiku'];
   const dims = ['input', 'output', 'cacheCreation', 'cacheRead'];
   const out = {};
   for (const tier of tiers) {
@@ -690,7 +690,7 @@ app.post('/api/price-history', (req, res) => {
     /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z?)?$/.test(effectiveFrom) &&
     !Number.isNaN(Date.parse(effectiveFrom));
   if (
-    !['opus', 'sonnet', 'haiku'].includes(tier) ||
+    !['fable', 'opus', 'sonnet', 'haiku'].includes(tier) ||
     !['input', 'output', 'cacheCreation', 'cacheRead'].includes(dimension) ||
     typeof rate !== 'number' ||
     !Number.isFinite(rate) ||

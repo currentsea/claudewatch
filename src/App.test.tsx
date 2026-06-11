@@ -78,6 +78,7 @@ const mockUsageData = {
   ],
   activeSessions: [],
   modelPricing: {
+    fable: { displayName: 'Claude Fable', color: '#f59e0b', input: 10, output: 50, cacheCreation: 12.5, cacheRead: 1 },
     opus: { displayName: 'Claude Opus', color: '#a855f7', input: 5, output: 25, cacheCreation: 6.25, cacheRead: 0.5 },
     sonnet: { displayName: 'Claude Sonnet', color: '#6366f1', input: 3, output: 15, cacheCreation: 3.75, cacheRead: 0.3 },
     haiku: { displayName: 'Claude Haiku', color: '#06b6d4', input: 1, output: 5, cacheCreation: 1.25, cacheRead: 0.1 },

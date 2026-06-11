@@ -3,12 +3,16 @@ import { PricingSettings, SubscriptionTier } from '../types';
 // ── Default pricing constants ─────────────────────────────────────────────────
 
 // Defaults reflect current Anthropic API pricing as of June 2026.
-// Latest models: Opus 4.8 (most capable), Sonnet 4.6 (balanced), Haiku 4.5 (fastest).
+// Latest models: Fable 5 (frontier tier above Opus, $10/$50), Opus 4.8
+// (most capable Opus-tier), Sonnet 4.6 (balanced), Haiku 4.5 (fastest).
 // Opus 4.5–4.8 are $5/$25 per MTok (down from $15/$75 on Opus 4.1).
 // Sonnet 4.5/4.6 stay at $3/$15. Haiku 4.5 is $1/$5 (Haiku 3.5 was $0.80/$4).
-// Source: https://docs.anthropic.com/en/docs/about-claude/pricing
+// Cache write is 1.25× input; cache read is 0.1× input — same multipliers on
+// every tier, Fable 5 included.
+// Source: https://platform.claude.com/docs/en/about-claude/models/overview
 export const DEFAULT_PRICING_SETTINGS: PricingSettings = {
   modelPricing: {
+    fable: { input: 10.0, output: 50.0, cacheCreation: 12.5, cacheRead: 1.0 },
     opus: { input: 5.0, output: 25.0, cacheCreation: 6.25, cacheRead: 0.5 },
     sonnet: { input: 3.0, output: 15.0, cacheCreation: 3.75, cacheRead: 0.3 },
     haiku: { input: 1.0, output: 5.0, cacheCreation: 1.25, cacheRead: 0.1 },
@@ -41,6 +45,7 @@ export function loadPricingSettings(): PricingSettings {
     // Deep-merge with defaults so new fields always exist
     return {
       modelPricing: {
+        fable: { ...DEFAULT_PRICING_SETTINGS.modelPricing.fable, ...parsed.modelPricing?.fable },
         opus: { ...DEFAULT_PRICING_SETTINGS.modelPricing.opus, ...parsed.modelPricing?.opus },
         sonnet: { ...DEFAULT_PRICING_SETTINGS.modelPricing.sonnet, ...parsed.modelPricing?.sonnet },
         haiku: { ...DEFAULT_PRICING_SETTINGS.modelPricing.haiku, ...parsed.modelPricing?.haiku },

@@ -306,7 +306,11 @@ describe('loadPricingSettings / savePricingSettings', () => {
     const loaded = loadPricingSettings();
 
     expect(loaded.modelPricing.opus.input).toBe(4.0);
-    // Sonnet/Haiku should fall back to defaults
+    // Fable/Sonnet/Haiku should fall back to defaults — fable in particular
+    // is absent from any settings stored before the Fable 5 launch
+    expect(loaded.modelPricing.fable).toEqual(
+      DEFAULT_PRICING_SETTINGS.modelPricing.fable
+    );
     expect(loaded.modelPricing.sonnet).toEqual(
       DEFAULT_PRICING_SETTINGS.modelPricing.sonnet
     );
@@ -328,6 +332,11 @@ describe('loadPricingSettings / savePricingSettings', () => {
 
 // ── default pricing matches Anthropic's current rates ────────────────────────
 describe('DEFAULT_PRICING_SETTINGS', () => {
+  it('reflects Fable 5 launch rates: $10/$50', () => {
+    expect(DEFAULT_PRICING_SETTINGS.modelPricing.fable.input).toBe(10.0);
+    expect(DEFAULT_PRICING_SETTINGS.modelPricing.fable.output).toBe(50.0);
+  });
+
   it('reflects current (May 2026) Opus 4.5+ rates: $5/$25', () => {
     expect(DEFAULT_PRICING_SETTINGS.modelPricing.opus.input).toBe(5.0);
     expect(DEFAULT_PRICING_SETTINGS.modelPricing.opus.output).toBe(25.0);
@@ -344,14 +353,16 @@ describe('DEFAULT_PRICING_SETTINGS', () => {
   });
 
   it('keeps cache-write multipliers consistent with the 1.25x rule', () => {
-    const { opus, sonnet, haiku } = DEFAULT_PRICING_SETTINGS.modelPricing;
+    const { fable, opus, sonnet, haiku } = DEFAULT_PRICING_SETTINGS.modelPricing;
+    expect(fable.cacheCreation).toBeCloseTo(fable.input * 1.25, 2);
     expect(opus.cacheCreation).toBeCloseTo(opus.input * 1.25, 2);
     expect(sonnet.cacheCreation).toBeCloseTo(sonnet.input * 1.25, 2);
     expect(haiku.cacheCreation).toBeCloseTo(haiku.input * 1.25, 2);
   });
 
   it('keeps cache-read multipliers consistent with the 0.1x rule', () => {
-    const { opus, sonnet, haiku } = DEFAULT_PRICING_SETTINGS.modelPricing;
+    const { fable, opus, sonnet, haiku } = DEFAULT_PRICING_SETTINGS.modelPricing;
+    expect(fable.cacheRead).toBeCloseTo(fable.input * 0.1, 2);
     expect(opus.cacheRead).toBeCloseTo(opus.input * 0.1, 2);
     expect(sonnet.cacheRead).toBeCloseTo(sonnet.input * 0.1, 2);
     expect(haiku.cacheRead).toBeCloseTo(haiku.input * 0.1, 2);

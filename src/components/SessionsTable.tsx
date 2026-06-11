@@ -12,6 +12,7 @@ interface Props {
 function getModelBadge(models: Record<string, any>): string {
   const tiers = Object.keys(models).map((m) => {
     const id = m.toLowerCase();
+    if (id.includes('fable') || id.includes('mythos')) return 'Fable';
     if (id.includes('opus')) return 'Opus';
     if (id.includes('haiku')) return 'Haiku';
     return 'Sonnet';

@@ -13,6 +13,7 @@ export interface ModelPricingValues {
 
 export interface PricingSettings {
   modelPricing: {
+    fable: ModelPricingValues;
     opus: ModelPricingValues;
     sonnet: ModelPricingValues;
     haiku: ModelPricingValues;
@@ -36,7 +37,7 @@ export interface TokenCounts {
 export interface ModelCostEntry {
   cost: number;
   tokens: TokenCounts;
-  tier: 'opus' | 'sonnet' | 'haiku';
+  tier: 'fable' | 'opus' | 'sonnet' | 'haiku';
   displayName: string;
   color: string;
 }
@@ -154,7 +155,7 @@ export interface ModelPricing {
 // ── Aggregates (SQLite-backed) ────────────────────────────────────────────────
 
 export interface PriceHistoryEntry {
-  tier: 'opus' | 'sonnet' | 'haiku';
+  tier: 'fable' | 'opus' | 'sonnet' | 'haiku';
   dimension: 'input' | 'output' | 'cacheCreation' | 'cacheRead';
   rate: number;
   effectiveFrom: string; // ISO date
@@ -164,7 +165,7 @@ export interface PriceHistoryEntry {
 export interface AggregateRow {
   project: string;
   month: string;       // "2026-05"
-  tier: 'opus' | 'sonnet' | 'haiku' | 'unknown';
+  tier: 'fable' | 'opus' | 'sonnet' | 'haiku' | 'unknown';
   sessions: number;
   messages: number;
   inputTokens: number;

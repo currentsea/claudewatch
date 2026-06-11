@@ -151,7 +151,7 @@ export function PricingSettingsPanel({ settings, onChange }: Props) {
     JSON.stringify(settings) === JSON.stringify(DEFAULT_PRICING_SETTINGS);
 
   const setModelPricing = useCallback(
-    (tier: 'opus' | 'sonnet' | 'haiku', values: ModelPricingValues) => {
+    (tier: 'fable' | 'opus' | 'sonnet' | 'haiku', values: ModelPricingValues) => {
       onChange({
         ...settings,
         modelPricing: { ...settings.modelPricing, [tier]: values },
@@ -206,9 +206,18 @@ export function PricingSettingsPanel({ settings, onChange }: Props) {
 
       <div className="mb-8 space-y-3">
         <ModelPricingRow
+          name="Claude Fable 5"
+          color="text-amber-400"
+          badge="Most capable"
+          badgeColor="border-amber-500/30 text-amber-400 bg-amber-500/10"
+          values={settings.modelPricing.fable}
+          defaults={DEFAULT_PRICING_SETTINGS.modelPricing.fable}
+          onChange={(v) => setModelPricing('fable', v)}
+        />
+        <ModelPricingRow
           name="Claude Opus 4.8"
           color="text-purple-400"
-          badge="Most capable"
+          badge="Opus flagship"
           badgeColor="border-purple-500/30 text-purple-400 bg-purple-500/10"
           values={settings.modelPricing.opus}
           defaults={DEFAULT_PRICING_SETTINGS.modelPricing.opus}
@@ -363,6 +372,10 @@ export function PricingSettingsPanel({ settings, onChange }: Props) {
         </div>
         <p>
           The model name (
+          <code className="rounded bg-slate-700/60 px-1 text-slate-300">
+            claude-fable-*
+          </code>
+          ,{' '}
           <code className="rounded bg-slate-700/60 px-1 text-slate-300">
             claude-opus-*
           </code>

@@ -42,12 +42,12 @@ describe('openDatabase', () => {
     ndb.close();
   });
 
-  it('seeds the price_history table with 12 default rows on first open', () => {
+  it('seeds the price_history table with 16 default rows on first open', () => {
     const rows = listPriceHistory(db);
-    expect(rows.length).toBe(12);
+    expect(rows.length).toBe(16);
     const tiers = new Set(rows.map((r) => r.tier));
     const dims = new Set(rows.map((r) => r.dimension));
-    expect(tiers).toEqual(new Set(['opus', 'sonnet', 'haiku']));
+    expect(tiers).toEqual(new Set(['fable', 'opus', 'sonnet', 'haiku']));
     expect(dims).toEqual(
       new Set(['input', 'output', 'cacheCreation', 'cacheRead'])
     );
@@ -57,14 +57,94 @@ describe('openDatabase', () => {
     db.close();
     db = openDatabase(dir);
     const rows = listPriceHistory(db);
-    expect(rows.length).toBe(12);
+    expect(rows.length).toBe(16);
   });
 
   it('records the source citation for seeded prices', () => {
     const rows = listPriceHistory(db);
     for (const r of rows) {
-      expect(r.source).toMatch(/anthropic\.com/);
+      expect(r.source).toMatch(/anthropic\.com|platform\.claude\.com/);
     }
+  });
+
+  it('seeds Fable 5 at $10/$50 with standard cache multipliers', () => {
+    const rows = listPriceHistory(db).filter((r) => r.tier === 'fable');
+    const byDim = Object.fromEntries(rows.map((r) => [r.dimension, r.rate]));
+    expect(byDim).toEqual({
+      input: 10.0,
+      output: 50.0,
+      cacheCreation: 12.5,
+      cacheRead: 1.0,
+    });
+  });
+});
+
+// ── schema v1 → v2 migration (fable tier added to the CHECK constraint) ──────
+describe('schema migration to v2', () => {
+  let dir;
+  let db;
+
+  beforeEach(() => {
+    dir = freshDataDir();
+    // Hand-build a v1 database: old CHECK without 'fable', 12 seeded rows.
+    const Database = require('better-sqlite3');
+    const v1 = new Database(path.join(dir, 'claudewatch.sqlite'));
+    v1.exec(`
+      CREATE TABLE schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      INSERT INTO schema_meta (key, value) VALUES ('schema_version', '1');
+      CREATE TABLE price_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tier TEXT NOT NULL CHECK (tier IN ('opus', 'sonnet', 'haiku')),
+        dimension TEXT NOT NULL CHECK (dimension IN ('input', 'output', 'cacheCreation', 'cacheRead')),
+        rate REAL NOT NULL,
+        effective_from TEXT NOT NULL,
+        source TEXT NOT NULL,
+        UNIQUE (tier, dimension, effective_from)
+      );
+      CREATE INDEX idx_price_history_lookup
+        ON price_history (tier, dimension, effective_from);
+      INSERT INTO price_history (tier, dimension, rate, effective_from, source) VALUES
+        ('opus', 'input', 5.0, '2026-01-01T00:00:00Z', 'docs.anthropic.com'),
+        ('opus', 'output', 25.0, '2026-01-01T00:00:00Z', 'docs.anthropic.com'),
+        ('opus', 'input', 8.88, '2026-04-01T00:00:00Z', 'user-entered');
+    `);
+    v1.close();
+    db = openDatabase(dir);
+  });
+
+  afterEach(() => {
+    db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('rebuilds price_history so fable rows can be inserted', () => {
+    expect(() =>
+      recordPrice(db, {
+        tier: 'fable',
+        dimension: 'input',
+        rate: 11,
+        effectiveFrom: '2026-07-01T00:00:00Z',
+        source: 'test',
+      })
+    ).not.toThrow();
+  });
+
+  it('preserves pre-existing rows (including user-entered ones) and backfills fable', () => {
+    const rows = listPriceHistory(db);
+    const userRow = rows.find((r) => r.source === 'user-entered');
+    expect(userRow).toMatchObject({ tier: 'opus', dimension: 'input', rate: 8.88 });
+    const fableRows = rows.filter((r) => r.tier === 'fable');
+    expect(fableRows.length).toBe(4);
+    // Historical lookups still work across the rebuild
+    expect(rateAt(db, 'opus', 'input', '2026-04-15T00:00:00Z', 0)).toBe(8.88);
+    expect(rateAt(db, 'fable', 'input', '2026-06-15T00:00:00Z', 0)).toBe(10);
+  });
+
+  it('bumps schema_version to 2 and is a no-op on reopen', () => {
+    const before = listPriceHistory(db).length;
+    db.close();
+    db = openDatabase(dir);
+    expect(listPriceHistory(db).length).toBe(before);
   });
 });
 

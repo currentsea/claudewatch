@@ -18,6 +18,7 @@ interface Props {
 type GroupMode = 'project' | 'month' | 'tier';
 
 const TIER_COLORS: Record<string, string> = {
+  fable: 'text-amber-400',
   opus: 'text-purple-400',
   sonnet: 'text-indigo-400',
   haiku: 'text-cyan-400',
@@ -25,6 +26,7 @@ const TIER_COLORS: Record<string, string> = {
 };
 
 const TIER_BG: Record<string, string> = {
+  fable: 'bg-amber-500',
   opus: 'bg-purple-500',
   sonnet: 'bg-indigo-500',
   haiku: 'bg-cyan-500',

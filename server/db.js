@@ -9,7 +9,7 @@ const path = require('path');
 const fs = require('fs');
 const Database = require('better-sqlite3');
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 /**
  * Initialise (or open) the database. Creates parent dir if missing.
@@ -33,6 +33,7 @@ function openDatabase(dataPath) {
 
   migrate(db);
   seedPriceHistoryIfEmpty(db);
+  ensureFableSeeded(db);
 
   return db;
 }
@@ -46,7 +47,7 @@ function migrate(db) {
 
     CREATE TABLE IF NOT EXISTS price_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      tier TEXT NOT NULL CHECK (tier IN ('opus', 'sonnet', 'haiku')),
+      tier TEXT NOT NULL CHECK (tier IN ('opus', 'sonnet', 'haiku', 'fable')),
       dimension TEXT NOT NULL CHECK (dimension IN ('input', 'output', 'cacheCreation', 'cacheRead')),
       rate REAL NOT NULL,
       effective_from TEXT NOT NULL,
@@ -85,11 +86,49 @@ function migrate(db) {
     .prepare('SELECT value FROM schema_meta WHERE key = ?')
     .get('schema_version');
   if (!row) {
+    // Fresh database — the CREATE TABLE above already used the v2 schema.
     db.prepare(
       'INSERT INTO schema_meta (key, value) VALUES (?, ?)'
     ).run('schema_version', String(SCHEMA_VERSION));
+    return;
+  }
+
+  const version = parseInt(row.value, 10) || 1;
+  if (version < 2) {
+    // v2: price_history's tier CHECK gains 'fable' (Claude Fable 5 / Mythos 5).
+    // SQLite cannot alter a CHECK constraint, so rebuild the table in place.
+    // RENAME carries the old index along; DROP TABLE removes it, then the
+    // index is recreated against the rebuilt table.
+    db.exec(`
+      BEGIN;
+      ALTER TABLE price_history RENAME TO price_history_v1;
+      CREATE TABLE price_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        tier TEXT NOT NULL CHECK (tier IN ('opus', 'sonnet', 'haiku', 'fable')),
+        dimension TEXT NOT NULL CHECK (dimension IN ('input', 'output', 'cacheCreation', 'cacheRead')),
+        rate REAL NOT NULL,
+        effective_from TEXT NOT NULL,
+        source TEXT NOT NULL,
+        UNIQUE (tier, dimension, effective_from)
+      );
+      INSERT INTO price_history SELECT * FROM price_history_v1;
+      DROP TABLE price_history_v1;
+      CREATE INDEX IF NOT EXISTS idx_price_history_lookup
+        ON price_history (tier, dimension, effective_from);
+      COMMIT;
+    `);
+    db.prepare('UPDATE schema_meta SET value = ? WHERE key = ?').run(
+      String(SCHEMA_VERSION),
+      'schema_version'
+    );
   }
 }
+
+// Claude Fable 5 / Mythos 5 launched June 2026 at $10/$50 per MTok.
+// Effective-from predates any possible fable-tier session, and rateAt falls
+// back to MODEL_PRICING (the same rates) for timestamps before it anyway.
+const FABLE_SEED_DATE = '2026-06-01T00:00:00Z';
+const FABLE_SOURCE = 'platform.claude.com/docs/en/about-claude/models/overview';
 
 /**
  * Seed price_history with the current default rates if the table is empty.
@@ -111,6 +150,10 @@ function seedPriceHistoryIfEmpty(db) {
   const SEED_DATE = '2026-01-01T00:00:00Z';
 
   const seed = [
+    ['fable',  'input',          10.0, FABLE_SEED_DATE, FABLE_SOURCE],
+    ['fable',  'output',         50.0, FABLE_SEED_DATE, FABLE_SOURCE],
+    ['fable',  'cacheCreation',  12.5, FABLE_SEED_DATE, FABLE_SOURCE],
+    ['fable',  'cacheRead',      1.0,  FABLE_SEED_DATE, FABLE_SOURCE],
     ['opus',   'input',          5.0,  SEED_DATE, SOURCE],
     ['opus',   'output',         25.0, SEED_DATE, SOURCE],
     ['opus',   'cacheCreation',  6.25, SEED_DATE, SOURCE],
@@ -129,6 +172,33 @@ function seedPriceHistoryIfEmpty(db) {
     for (const r of rows) insert.run(...r);
   });
   tx(seed);
+}
+
+/**
+ * Backfill the fable tier into databases seeded before schema v2. Idempotent —
+ * INSERT OR IGNORE on the (tier, dimension, effective_from) unique key, so
+ * user-recorded fable rates are never overwritten.
+ */
+function ensureFableSeeded(db) {
+  const count = db
+    .prepare("SELECT COUNT(*) AS n FROM price_history WHERE tier = 'fable'")
+    .get();
+  if (count.n > 0) return;
+
+  const insert = db.prepare(`
+    INSERT OR IGNORE INTO price_history (tier, dimension, rate, effective_from, source)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+  const rows = [
+    ['fable', 'input',         10.0, FABLE_SEED_DATE, FABLE_SOURCE],
+    ['fable', 'output',        50.0, FABLE_SEED_DATE, FABLE_SOURCE],
+    ['fable', 'cacheCreation', 12.5, FABLE_SEED_DATE, FABLE_SOURCE],
+    ['fable', 'cacheRead',     1.0,  FABLE_SEED_DATE, FABLE_SOURCE],
+  ];
+  const tx = db.transaction((rs) => {
+    for (const r of rs) insert.run(...r);
+  });
+  tx(rows);
 }
 
 /**

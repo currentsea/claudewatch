@@ -4,11 +4,20 @@
  * the filesystem.
  *
  * Mirrors `src/utils/pricing.ts` defaults — both must stay in sync.
- * Latest models: Opus 4.8 (most capable), Sonnet 4.6 (balanced), Haiku 4.5 (fastest).
- * Source: https://docs.anthropic.com/en/docs/about-claude/pricing (June 2026)
+ * Latest models: Fable 5 (frontier tier above Opus, $10/$50), Opus 4.8
+ * (most capable Opus-tier), Sonnet 4.6 (balanced), Haiku 4.5 (fastest).
+ * Source: https://platform.claude.com/docs/en/about-claude/models/overview (June 2026)
  */
 
 const MODEL_PRICING = {
+  fable: {
+    displayName: 'Claude Fable',
+    color: '#f59e0b',
+    input: 10.0,
+    output: 50.0,
+    cacheCreation: 12.5,
+    cacheRead: 1.0,
+  },
   opus: {
     displayName: 'Claude Opus',
     color: '#a855f7',
@@ -37,6 +46,8 @@ const MODEL_PRICING = {
 
 function getModelTier(modelId) {
   const id = (modelId || '').toLowerCase();
+  // Fable 5 and Mythos 5 share the same frontier-tier pricing
+  if (id.includes('fable') || id.includes('mythos')) return 'fable';
   if (id.includes('opus')) return 'opus';
   if (id.includes('haiku')) return 'haiku';
   return 'sonnet';
@@ -45,7 +56,7 @@ function getModelTier(modelId) {
 function resolveEffectivePricing(overrides) {
   if (!overrides) return MODEL_PRICING;
   const result = {};
-  for (const tier of ['opus', 'sonnet', 'haiku']) {
+  for (const tier of ['fable', 'opus', 'sonnet', 'haiku']) {
     result[tier] = { ...MODEL_PRICING[tier], ...(overrides[tier] || {}) };
   }
   return result;

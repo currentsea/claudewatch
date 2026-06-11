@@ -23,6 +23,13 @@ describe('getModelTier', () => {
     expect(getModelTier('Claude-Haiku-3.5')).toBe('haiku');
   });
 
+  it('maps Fable 5 and Mythos 5 model ids to the fable tier', () => {
+    expect(getModelTier('claude-fable-5')).toBe('fable');
+    expect(getModelTier('claude-fable-5[1m]')).toBe('fable');
+    expect(getModelTier('claude-mythos-5')).toBe('fable');
+    expect(getModelTier('claude-mythos-preview')).toBe('fable');
+  });
+
   it('defaults unknown / non-matching model ids to sonnet', () => {
     expect(getModelTier('claude-sonnet-4-6')).toBe('sonnet');
     expect(getModelTier('some-future-model')).toBe('sonnet');
@@ -47,6 +54,7 @@ describe('resolveEffectivePricing', () => {
     expect(result.opus.output).toBe(200);
     // Cache fields and other tiers should be untouched
     expect(result.opus.cacheCreation).toBe(MODEL_PRICING.opus.cacheCreation);
+    expect(result.fable).toEqual(MODEL_PRICING.fable);
     expect(result.sonnet).toEqual(MODEL_PRICING.sonnet);
     expect(result.haiku).toEqual(MODEL_PRICING.haiku);
   });
@@ -59,7 +67,7 @@ describe('resolveEffectivePricing', () => {
     expect(result.opus.color).toBe('#a855f7');
   });
 
-  it('ignores tier keys that are not opus/sonnet/haiku', () => {
+  it('ignores tier keys that are not fable/opus/sonnet/haiku', () => {
     const result = resolveEffectivePricing({
       banana: { input: 9999 },
     });
@@ -104,6 +112,17 @@ describe('computeTokenCost', () => {
       override
     );
     expect(cost).toBeCloseTo(10, 4);
+  });
+
+  it('prices fable-tier usage at $10/$50 with frontier cache rates', () => {
+    const tokens = {
+      inputTokens: 1_000_000,
+      outputTokens: 1_000_000,
+      cacheCreationInputTokens: 1_000_000,
+      cacheReadInputTokens: 1_000_000,
+    };
+    const cost = computeTokenCost(tokens, 'claude-fable-5[1m]');
+    expect(cost).toBeCloseTo(10 + 50 + 12.5 + 1.0, 4);
   });
 
   it('gracefully tolerates missing token-bucket keys', () => {
@@ -189,6 +208,11 @@ describe('extractProjectName', () => {
 
 // ── pricing sanity (defaults are aligned with current Anthropic rates) ────────
 describe('MODEL_PRICING (defaults)', () => {
+  it('Fable 5 rates: $10 input / $50 output', () => {
+    expect(MODEL_PRICING.fable.input).toBe(10);
+    expect(MODEL_PRICING.fable.output).toBe(50);
+  });
+
   it('Opus 4.5+ rates: $5 input / $25 output', () => {
     expect(MODEL_PRICING.opus.input).toBe(5);
     expect(MODEL_PRICING.opus.output).toBe(25);
@@ -205,14 +229,14 @@ describe('MODEL_PRICING (defaults)', () => {
   });
 
   it('cache-write rates are 1.25× input for every tier', () => {
-    for (const tier of ['opus', 'sonnet', 'haiku']) {
+    for (const tier of ['fable', 'opus', 'sonnet', 'haiku']) {
       const p = MODEL_PRICING[tier];
       expect(p.cacheCreation).toBeCloseTo(p.input * 1.25, 4);
     }
   });
 
   it('cache-read rates are 0.1× input for every tier', () => {
-    for (const tier of ['opus', 'sonnet', 'haiku']) {
+    for (const tier of ['fable', 'opus', 'sonnet', 'haiku']) {
       const p = MODEL_PRICING[tier];
       expect(p.cacheRead).toBeCloseTo(p.input * 0.1, 4);
     }

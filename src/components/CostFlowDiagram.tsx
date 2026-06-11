@@ -144,7 +144,7 @@ export function CostFlowDiagram({ data, subscriptionCost }: Props) {
               </tr>
             </thead>
             <tbody className="text-slate-300">
-              {(['opus', 'sonnet', 'haiku'] as const).map((tier) => {
+              {(['fable', 'opus', 'sonnet', 'haiku'] as const).map((tier) => {
                 const p = modelPricing[tier];
                 if (!p) return null;
                 const tierCost = modelEntries

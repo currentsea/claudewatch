@@ -142,7 +142,7 @@ export function PeriodApiCostDrilldown({
 
   // Per-model breakdown
   const modelEntries = Object.entries(computedCosts.byModel);
-  const tiers = ['opus', 'sonnet', 'haiku'] as const;
+  const tiers = ['fable', 'opus', 'sonnet', 'haiku'] as const;
 
   for (const tier of tiers) {
     const tierEntries = modelEntries.filter(([, v]) => v.tier === tier);
@@ -260,7 +260,7 @@ export function AllTimeApiDrilldown({
     : 'first recorded session';
 
   const rows: DrilldownRow[] = [];
-  const tiers = ['opus', 'sonnet', 'haiku'] as const;
+  const tiers = ['fable', 'opus', 'sonnet', 'haiku'] as const;
   const modelEntries = Object.entries(computedCosts.byModel);
 
   for (const tier of tiers) {
