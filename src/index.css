@@ -17,6 +17,18 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
 }
 
+/* ── Accordion rows (project → prompts dropdown) ────────────────────────────── */
+@keyframes accordion-row-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.accordion-row {
+  animation: accordion-row-in 0.22s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .accordion-row { animation: none; }
+}
+
 /* ── Scrollbar styling (dark) ───────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: #1e293b; }
@@ -61,6 +73,7 @@ body:has(.light-mode) {
 .light-mode .bg-slate-800\/50        { background-color: #ffffff !important; }
 .light-mode .bg-slate-800\/30        { background-color: rgba(255,255,255,.75) !important; }
 .light-mode .bg-slate-800\/60        { background-color: #f1f5f9 !important; }
+.light-mode .bg-slate-800\/80        { background-color: #e2e8f0 !important; }
 
 .light-mode .bg-slate-700            { background-color: #e2e8f0 !important; }
 .light-mode .bg-slate-700\/60        { background-color: #e2e8f0 !important; }

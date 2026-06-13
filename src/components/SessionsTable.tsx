@@ -1,6 +1,15 @@
-import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, TrendingUp, TrendingDown, Info } from 'lucide-react';
-import { Session } from '../types';
+import React, { useMemo, useState } from 'react';
+import {
+  ChevronDown,
+  ChevronUp,
+  ChevronRight,
+  FolderGit2,
+  TrendingUp,
+  TrendingDown,
+  Info,
+  CornerDownRight,
+} from 'lucide-react';
+import { Session, TokenCounts } from '../types';
 import { formatCost, formatTokens } from '../utils/pricing';
 
 interface Props {
@@ -8,6 +17,8 @@ interface Props {
   subscriptionCost: number;
   onSelectSession?: (sessionId: string) => void;
 }
+
+type SortCol = 'date' | 'cost' | 'tokens' | 'subcost';
 
 function getModelBadge(models: Record<string, any>): string {
   const tiers = Object.keys(models).map((m) => {
@@ -26,20 +37,10 @@ function getModelBadge(models: Record<string, any>): string {
   return unique.join(' + ');
 }
 
-function cacheHitRate(tokens: Session['totalTokens']): number {
-  const total =
-    tokens.inputTokens +
-    tokens.outputTokens +
-    tokens.cacheReadInputTokens +
-    tokens.cacheCreationInputTokens;
-  if (total === 0) return 0;
-  return (tokens.cacheReadInputTokens / total) * 100;
-}
-
-/** Token share of this session as a fraction (0–1) of all session tokens combined. */
-function tokenShare(sessionTokens: number, totalTokens: number): number {
-  if (totalTokens === 0) return 0;
-  return sessionTokens / totalTokens;
+function sumTokens(t: TokenCounts): number {
+  return (
+    t.inputTokens + t.outputTokens + t.cacheReadInputTokens + t.cacheCreationInputTokens
+  );
 }
 
 function shareColor(pct: number): string {
@@ -54,81 +55,175 @@ function shareBarColor(pct: number): string {
   return 'bg-red-500';
 }
 
+/** Split "WebstormProjects/burnitdown" into a dim prefix + highlighted repo name. */
+function splitProjectName(project: string): { prefix: string; name: string } {
+  const trimmed = project.replace(/\/+$/, '');
+  const idx = trimmed.lastIndexOf('/');
+  if (idx === -1) return { prefix: '', name: trimmed || 'unknown' };
+  return {
+    prefix: trimmed.slice(0, idx + 1),
+    name: trimmed.slice(idx + 1) || trimmed,
+  };
+}
+
+function formatDate(iso: string | null): string {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: '2-digit',
+  });
+}
+
+interface EnrichedSession extends Session {
+  totalTok: number;
+  cachePct: number;
+  subPct: number;
+  yourCostForSession: number;
+  sessionValue: number;
+}
+
+interface ProjectGroup {
+  project: string;
+  sessions: EnrichedSession[];
+  totalTok: number;
+  cachePct: number;
+  msgs: number;
+  apiCost: number;
+  yourCost: number;
+  subPct: number;
+  groupValue: number;
+  lastActivityMs: number;
+  models: Record<string, true>;
+}
+
 export function SessionsTable({ sessions, subscriptionCost, onSelectSession }: Props) {
-  const [expanded, setExpanded] = useState(false);
-  const [sortBy, setSortBy] = useState<'date' | 'cost' | 'tokens' | 'subcost'>('date');
+  const [showAllGroups, setShowAllGroups] = useState(false);
+  const [sortBy, setSortBy] = useState<SortCol>('cost');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [showLegend, setShowLegend] = useState(false);
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
 
-  const mainSessions = sessions.filter((s) => !s.isSubagent);
+  const mainSessions = useMemo(() => sessions.filter((s) => !s.isSubagent), [sessions]);
 
-  // Total tokens across all sessions (for proportional subscription allocation)
-  const totalAllTokens = mainSessions.reduce((sum, s) => {
-    return (
-      sum +
-      s.totalTokens.inputTokens +
-      s.totalTokens.outputTokens +
-      s.totalTokens.cacheReadInputTokens +
-      s.totalTokens.cacheCreationInputTokens
-    );
-  }, 0);
+  // Totals across every session (for proportional subscription allocation)
+  const totalAllTokens = useMemo(
+    () => mainSessions.reduce((sum, s) => sum + sumTokens(s.totalTokens), 0),
+    [mainSessions]
+  );
+  const totalSessionApiCost = useMemo(
+    () => mainSessions.reduce((s, sess) => s + sess.estimatedCost, 0),
+    [mainSessions]
+  );
 
-  // Total API cost across all sessions (for subscription-cost weighting)
-  const totalSessionApiCost = mainSessions.reduce((s, sess) => s + sess.estimatedCost, 0);
+  // ── Group sessions by project / repository ────────────────────────────────
+  const groups = useMemo<ProjectGroup[]>(() => {
+    const byProject = new Map<string, ProjectGroup>();
 
-  // Compute per-session metrics
-  const enriched = mainSessions.map((s) => {
-    const sessionTok =
-      s.totalTokens.inputTokens +
-      s.totalTokens.outputTokens +
-      s.totalTokens.cacheReadInputTokens +
-      s.totalTokens.cacheCreationInputTokens;
-    const share = tokenShare(sessionTok, totalAllTokens);
-    const sharePct = share * 100;
+    for (const s of mainSessions) {
+      const totalTok = sumTokens(s.totalTokens);
+      const share = totalAllTokens === 0 ? 0 : totalTok / totalAllTokens;
+      const yourCostForSession = share * subscriptionCost;
+      const enriched: EnrichedSession = {
+        ...s,
+        totalTok,
+        cachePct: totalTok === 0 ? 0 : (s.totalTokens.cacheReadInputTokens / totalTok) * 100,
+        subPct: share * 100,
+        yourCostForSession,
+        sessionValue: s.estimatedCost - yourCostForSession,
+      };
 
-    // "Your cost" — the slice of your subscription fee attributable to this session,
-    // proportional to its token share.
-    // e.g. if this session is 10% of all tokens, you "spent" 10% of your monthly fee here.
-    const yourCostForSession = share * subscriptionCost;
-
-    // Anthropic's estimated spend to serve this session (API list price ≈ upper bound)
-    const anthropicCostForSession = s.estimatedCost;
-
-    // Net from Anthropic's perspective: your subscription slice − their compute cost
-    const anthropicNet = yourCostForSession - anthropicCostForSession;
-
-    return {
-      ...s,
-      subPct: sharePct,
-      yourCostForSession,
-      anthropicCostForSession,
-      anthropicNet,
-    };
-  });
-
-  const sorted = [...enriched].sort((a, b) => {
-    let av = 0, bv = 0;
-    if (sortBy === 'date') {
-      av = new Date(a.lastActivity || 0).getTime();
-      bv = new Date(b.lastActivity || 0).getTime();
-    } else if (sortBy === 'cost') {
-      av = a.estimatedCost;
-      bv = b.estimatedCost;
-    } else if (sortBy === 'subcost') {
-      av = a.yourCostForSession;
-      bv = b.yourCostForSession;
-    } else {
-      av = a.totalTokens.inputTokens + a.totalTokens.outputTokens +
-           a.totalTokens.cacheReadInputTokens + a.totalTokens.cacheCreationInputTokens;
-      bv = b.totalTokens.inputTokens + b.totalTokens.outputTokens +
-           b.totalTokens.cacheReadInputTokens + b.totalTokens.cacheCreationInputTokens;
+      const key = s.project || 'unknown';
+      let g = byProject.get(key);
+      if (!g) {
+        g = {
+          project: key,
+          sessions: [],
+          totalTok: 0,
+          cachePct: 0,
+          msgs: 0,
+          apiCost: 0,
+          yourCost: 0,
+          subPct: 0,
+          groupValue: 0,
+          lastActivityMs: 0,
+          models: {},
+        };
+        byProject.set(key, g);
+      }
+      g.sessions.push(enriched);
+      g.totalTok += totalTok;
+      g.msgs += s.messageCount;
+      g.apiCost += s.estimatedCost;
+      g.yourCost += yourCostForSession;
+      g.subPct += enriched.subPct;
+      g.lastActivityMs = Math.max(
+        g.lastActivityMs,
+        s.lastActivity ? new Date(s.lastActivity).getTime() : 0
+      );
+      Object.keys(s.models).forEach((m) => {
+        g!.models[m] = true;
+      });
     }
-    return sortDir === 'desc' ? bv - av : av - bv;
-  });
 
-  const displayed = expanded ? sorted : sorted.slice(0, 12);
+    const list = Array.from(byProject.values());
+    for (const g of list) {
+      const cacheRead = g.sessions.reduce(
+        (sum, s) => sum + s.totalTokens.cacheReadInputTokens,
+        0
+      );
+      g.cachePct = g.totalTok === 0 ? 0 : (cacheRead / g.totalTok) * 100;
+      g.groupValue = g.apiCost - g.yourCost;
+      // Newest prompt first inside each project
+      g.sessions.sort(
+        (a, b) =>
+          new Date(b.lastActivity || 0).getTime() - new Date(a.lastActivity || 0).getTime()
+      );
+    }
+    return list;
+  }, [mainSessions, totalAllTokens, subscriptionCost]);
 
-  function handleSort(col: 'date' | 'cost' | 'tokens' | 'subcost') {
+  const sortedGroups = useMemo(() => {
+    const arr = [...groups];
+    arr.sort((a, b) => {
+      let av = 0,
+        bv = 0;
+      if (sortBy === 'date') {
+        av = a.lastActivityMs;
+        bv = b.lastActivityMs;
+      } else if (sortBy === 'cost') {
+        av = a.apiCost;
+        bv = b.apiCost;
+      } else if (sortBy === 'subcost') {
+        av = a.yourCost;
+        bv = b.yourCost;
+      } else {
+        av = a.totalTok;
+        bv = b.totalTok;
+      }
+      return sortDir === 'desc' ? bv - av : av - bv;
+    });
+    return arr;
+  }, [groups, sortBy, sortDir]);
+
+  const displayedGroups = showAllGroups ? sortedGroups : sortedGroups.slice(0, 10);
+  const allOpen = displayedGroups.length > 0 && displayedGroups.every((g) => openGroups.has(g.project));
+
+  function toggleGroup(project: string) {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(project)) next.delete(project);
+      else next.add(project);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    if (allOpen) setOpenGroups(new Set());
+    else setOpenGroups(new Set(sortedGroups.map((g) => g.project)));
+  }
+
+  function handleSort(col: SortCol) {
     if (sortBy === col) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     } else {
@@ -137,22 +232,20 @@ export function SessionsTable({ sessions, subscriptionCost, onSelectSession }: P
     }
   }
 
-  const SortIcon = ({ col }: { col: 'date' | 'cost' | 'tokens' | 'subcost' }) =>
+  const SortIcon = ({ col }: { col: SortCol }) =>
     sortBy === col ? (
       sortDir === 'desc' ? <ChevronDown size={12} /> : <ChevronUp size={12} />
     ) : null;
 
   // Keyboard parity for the click-to-sort headers (Enter / Space).
-  const sortKeyHandler =
-    (col: 'date' | 'cost' | 'tokens' | 'subcost') =>
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        handleSort(col);
-      }
-    };
+  const sortKeyHandler = (col: SortCol) => (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleSort(col);
+    }
+  };
 
-  const ariaSort = (col: 'date' | 'cost' | 'tokens' | 'subcost') =>
+  const ariaSort = (col: SortCol) =>
     sortBy === col ? (sortDir === 'desc' ? 'descending' : 'ascending') : 'none';
 
   // Whether the subscriber comes out ahead on the visible sessions
@@ -167,8 +260,9 @@ export function SessionsTable({ sessions, subscriptionCost, onSelectSession }: P
             Session P&amp;L vs Subscription
           </h3>
           <p className="text-xs text-slate-500">
-            {mainSessions.length} sessions · comparing your subscriber cost to Anthropic's
-            estimated compute expense per session
+            {mainSessions.length} prompts across {groups.length}{' '}
+            {groups.length === 1 ? 'project' : 'projects'} · expand a project to see its
+            individual prompts
           </p>
         </div>
         {/* Visible-sessions summary badge — uses subscriber framing only */}
@@ -198,12 +292,24 @@ export function SessionsTable({ sessions, subscriptionCost, onSelectSession }: P
             <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
             Your cost = your subscription fee weighted by token share
           </span>
-          <button
-            onClick={() => setShowLegend((v) => !v)}
-            className="ml-auto flex items-center gap-1 text-slate-600 hover:text-slate-400"
-          >
-            <Info size={11} /> {showLegend ? 'hide' : 'details'}
-          </button>
+          <span className="ml-auto flex items-center gap-3">
+            <button
+              onClick={toggleAll}
+              className="flex items-center gap-1 text-slate-500 hover:text-slate-300 transition-colors"
+            >
+              {allOpen ? (
+                <><ChevronUp size={11} /> Collapse all</>
+              ) : (
+                <><ChevronDown size={11} /> Expand all</>
+              )}
+            </button>
+            <button
+              onClick={() => setShowLegend((v) => !v)}
+              className="flex items-center gap-1 text-slate-600 hover:text-slate-400"
+            >
+              <Info size={11} /> {showLegend ? 'hide' : 'details'}
+            </button>
+          </span>
         </div>
 
         {showLegend && (
@@ -218,14 +324,14 @@ export function SessionsTable({ sessions, subscriptionCost, onSelectSession }: P
               </li>
               <li>
                 <strong className="text-blue-400">Your Subscriber Cost:</strong>{' '}
-                Your flat monthly subscription fee, divided proportionally by this session's
-                share of your total token usage. If this session used 5% of your all-time
+                Your flat monthly subscription fee, divided proportionally by each project's
+                share of your total token usage. If a project used 5% of your all-time
                 tokens, it "cost" you 5% × your monthly fee = {formatCost(subscriptionCost * 0.05)}.
               </li>
               <li>
-                The difference between these two numbers shows whether <em>this particular
-                session</em> was a good use of your subscription dollar — or whether you
-                would have spent less per session on pure API billing.
+                The difference between these two numbers shows whether a project (or any
+                single prompt inside it) was a good use of your subscription dollar — or
+                whether you would have spent less on pure API billing.
               </li>
             </ul>
           </div>
@@ -236,7 +342,9 @@ export function SessionsTable({ sessions, subscriptionCost, onSelectSession }: P
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-slate-700/60 text-left">
-              <th className="px-5 py-3 text-xs font-medium text-slate-400">Project</th>
+              <th className="px-5 py-3 text-xs font-medium text-slate-400">
+                Project / Repository
+              </th>
               <th
                 className="px-4 py-3 text-xs font-medium text-slate-400 cursor-pointer hover:text-white select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/50"
                 onClick={() => handleSort('date')}
@@ -244,7 +352,7 @@ export function SessionsTable({ sessions, subscriptionCost, onSelectSession }: P
                 tabIndex={0}
                 aria-sort={ariaSort('date')}
               >
-                <span className="flex items-center gap-1">Date <SortIcon col="date" /></span>
+                <span className="flex items-center gap-1">Last active <SortIcon col="date" /></span>
               </th>
               <th className="px-4 py-3 text-xs font-medium text-slate-400">Model</th>
               <th className="hidden px-4 py-3 text-xs font-medium text-slate-400 md:table-cell">Msgs</th>
@@ -278,7 +386,7 @@ export function SessionsTable({ sessions, subscriptionCost, onSelectSession }: P
                 onKeyDown={sortKeyHandler('subcost')}
                 tabIndex={0}
                 aria-sort={ariaSort('subcost')}
-                title="Your subscription cost attributed to this session"
+                title="Your subscription cost attributed to this project"
               >
                 <span className="flex items-center gap-1">
                   Your Cost
@@ -289,121 +397,235 @@ export function SessionsTable({ sessions, subscriptionCost, onSelectSession }: P
             </tr>
           </thead>
           <tbody>
-            {displayed.map((session, i) => {
-              const total =
-                session.totalTokens.inputTokens +
-                session.totalTokens.outputTokens +
-                session.totalTokens.cacheReadInputTokens +
-                session.totalTokens.cacheCreationInputTokens;
-              const cache = cacheHitRate(session.totalTokens);
-              const pct = session.subPct;
-
-              // Net: if API cost > your cost → this session was "worth it" for you
-              const sessionValue = session.anthropicCostForSession - session.yourCostForSession;
+            {displayedGroups.map((group) => {
+              const isOpen = openGroups.has(group.project);
+              const { prefix, name } = splitProjectName(group.project);
 
               return (
-                <tr
-                  key={session.sessionId}
-                  onClick={() => onSelectSession?.(session.sessionId)}
-                  onKeyDown={
-                    onSelectSession
-                      ? (e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            onSelectSession(session.sessionId);
-                          }
+                <React.Fragment key={group.project}>
+                  {/* ── Project group row ─────────────────────────────────── */}
+                  <tr
+                    onClick={() => toggleGroup(group.project)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        toggleGroup(group.project);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={isOpen}
+                    title={isOpen ? 'Collapse project' : 'Expand project'}
+                    className={`cursor-pointer border-b transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/50 ${
+                      isOpen
+                        ? 'border-slate-700/60 bg-slate-800/60 hover:bg-slate-800/80'
+                        : 'border-slate-700/30 hover:bg-slate-700/20'
+                    }`}
+                  >
+                    {/* Project */}
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <ChevronRight
+                          size={14}
+                          className={`shrink-0 text-slate-500 transition-transform duration-200 ${
+                            isOpen ? 'rotate-90 text-blue-400' : ''
+                          }`}
+                        />
+                        <div
+                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border transition-colors ${
+                            isOpen
+                              ? 'border-blue-500/40 bg-blue-500/15 text-blue-400'
+                              : 'border-slate-700/60 bg-slate-800/60 text-slate-400'
+                          }`}
+                        >
+                          <FolderGit2 size={13} />
+                        </div>
+                        <div className="min-w-0">
+                          <span
+                            className="block max-w-[180px] truncate text-xs font-semibold text-slate-100"
+                            title={group.project}
+                          >
+                            {prefix && <span className="font-normal text-slate-500">{prefix}</span>}
+                            {name}
+                          </span>
+                          <span className="block text-[10px] text-slate-500">
+                            {group.sessions.length}{' '}
+                            {group.sessions.length === 1 ? 'prompt' : 'prompts'}
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+
+                    {/* Last active */}
+                    <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">
+                      {group.lastActivityMs
+                        ? formatDate(new Date(group.lastActivityMs).toISOString())
+                        : '—'}
+                    </td>
+
+                    {/* Models */}
+                    <td className="px-4 py-3">
+                      <span className="rounded-md bg-slate-700/50 px-1.5 py-0.5 text-xs text-slate-300 whitespace-nowrap">
+                        {getModelBadge(group.models)}
+                      </span>
+                    </td>
+
+                    {/* Messages */}
+                    <td className="hidden px-4 py-3 text-xs text-slate-300 md:table-cell">
+                      {group.msgs.toLocaleString()}
+                    </td>
+
+                    {/* Tokens */}
+                    <td className="px-4 py-3 text-xs font-semibold text-white">
+                      {formatTokens(group.totalTok)}
+                    </td>
+
+                    {/* Cache hit rate */}
+                    <td className="hidden px-4 py-3 md:table-cell">
+                      <div className="flex items-center gap-1.5">
+                        <div className="h-1.5 w-14 overflow-hidden rounded-full bg-slate-700">
+                          <div
+                            className="h-full rounded-full bg-cyan-500"
+                            style={{ width: `${group.cachePct}%` }}
+                          />
+                        </div>
+                        <span className="text-xs text-slate-400">
+                          {group.cachePct.toFixed(0)}%
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* API Cost (Anthropic's expense) */}
+                    <td className="px-4 py-3 text-xs font-bold text-amber-400 whitespace-nowrap">
+                      {formatCost(group.apiCost)}
+                    </td>
+
+                    {/* Your subscriber cost */}
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col gap-0.5 min-w-[90px]">
+                        <span className={`text-xs font-bold ${shareColor(group.subPct)}`}>
+                          {formatCost(group.yourCost)}
+                        </span>
+                        <span
+                          className={`text-[10px] ${
+                            group.groupValue >= 0 ? 'text-emerald-600' : 'text-red-600'
+                          }`}
+                        >
+                          {group.groupValue >= 0
+                            ? `↑ +${formatCost(group.groupValue)} value`
+                            : `↓ ${formatCost(group.groupValue)} deficit`}
+                        </span>
+                        <div className="h-1 w-full overflow-hidden rounded-full bg-slate-700">
+                          <div
+                            className={`h-full rounded-full ${shareBarColor(group.subPct)} transition-all`}
+                            style={{ width: `${Math.min(group.subPct, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+
+                  {/* ── Individual prompts (accordion content) ────────────── */}
+                  {isOpen &&
+                    group.sessions.map((session, j) => (
+                      <tr
+                        key={session.sessionId}
+                        onClick={() => onSelectSession?.(session.sessionId)}
+                        onKeyDown={
+                          onSelectSession
+                            ? (e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  onSelectSession(session.sessionId);
+                                }
+                              }
+                            : undefined
                         }
-                      : undefined
-                  }
-                  role={onSelectSession ? 'button' : undefined}
-                  tabIndex={onSelectSession ? 0 : undefined}
-                  title={onSelectSession ? 'Click for drilldown' : undefined}
-                  className={`border-b border-slate-700/30 transition-colors hover:bg-slate-700/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/50 ${
-                    onSelectSession ? 'cursor-pointer' : ''
-                  } ${i % 2 === 0 ? '' : 'bg-black/20'}`}
-                >
-                  {/* Project */}
-                  <td className="px-5 py-3">
-                    <span
-                      className="block max-w-[160px] truncate text-xs font-medium text-slate-200"
-                      title={session.project}
-                    >
-                      {session.project}
-                    </span>
-                    <span className="block text-xs text-slate-500 font-mono truncate max-w-[160px]">
-                      {session.sessionId.slice(0, 8)}…
-                    </span>
-                  </td>
-
-                  {/* Date */}
-                  <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">
-                    {session.lastActivity
-                      ? new Date(session.lastActivity).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: '2-digit',
-                        })
-                      : '—'}
-                  </td>
-
-                  {/* Model */}
-                  <td className="px-4 py-3">
-                    <span className="rounded-md bg-slate-700/50 px-1.5 py-0.5 text-xs text-slate-300">
-                      {getModelBadge(session.models)}
-                    </span>
-                  </td>
-
-                  {/* Messages */}
-                  <td className="hidden px-4 py-3 text-xs text-slate-300 md:table-cell">{session.messageCount}</td>
-
-                  {/* Tokens */}
-                  <td className="px-4 py-3 text-xs font-medium text-white">
-                    {formatTokens(total)}
-                  </td>
-
-                  {/* Cache hit rate */}
-                  <td className="hidden px-4 py-3 md:table-cell">
-                    <div className="flex items-center gap-1.5">
-                      <div className="h-1.5 w-14 overflow-hidden rounded-full bg-slate-700">
-                        <div
-                          className="h-full rounded-full bg-cyan-500"
-                          style={{ width: `${cache}%` }}
-                        />
-                      </div>
-                      <span className="text-xs text-slate-400">{cache.toFixed(0)}%</span>
-                    </div>
-                  </td>
-
-                  {/* API Cost (Anthropic's expense) */}
-                  <td className="px-4 py-3 text-xs font-semibold text-amber-400 whitespace-nowrap">
-                    {formatCost(session.estimatedCost)}
-                  </td>
-
-                  {/* Your subscriber cost */}
-                  <td className="px-4 py-3">
-                    <div className="flex flex-col gap-0.5 min-w-[90px]">
-                      <span className={`text-xs font-semibold ${shareColor(pct)}`}>
-                        {formatCost(session.yourCostForSession)}
-                      </span>
-                      {/* Mini indicator: red = you "paid" more than Anthropic spent; green = vice versa */}
-                      <span
-                        className={`text-[10px] ${
-                          sessionValue >= 0 ? 'text-emerald-600' : 'text-red-600'
-                        }`}
+                        role={onSelectSession ? 'button' : undefined}
+                        tabIndex={onSelectSession ? 0 : undefined}
+                        title={onSelectSession ? 'Click for prompt drilldown' : undefined}
+                        style={{ animationDelay: `${Math.min(j, 12) * 25}ms` }}
+                        className={`accordion-row border-b border-slate-700/20 bg-black/30 transition-colors hover:bg-blue-500/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/50 ${
+                          onSelectSession ? 'cursor-pointer' : ''
+                        } ${j === group.sessions.length - 1 ? 'border-b-slate-700/40' : ''}`}
                       >
-                        {sessionValue >= 0
-                          ? `↑ +${formatCost(sessionValue)} value`
-                          : `↓ ${formatCost(sessionValue)} deficit`}
-                      </span>
-                      <div className="h-1 w-full overflow-hidden rounded-full bg-slate-700">
-                        <div
-                          className={`h-full rounded-full ${shareBarColor(pct)} transition-all`}
-                          style={{ width: `${Math.min(pct, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  </td>
-                </tr>
+                        {/* Prompt (session) */}
+                        <td className="px-5 py-2.5">
+                          <div className="ml-[26px] flex items-center gap-2 border-l border-slate-700/60 pl-3">
+                            <CornerDownRight size={11} className="shrink-0 text-slate-600" />
+                            <div className="min-w-0">
+                              <span className="block font-mono text-[11px] text-slate-300">
+                                {session.sessionId.slice(0, 8)}…
+                              </span>
+                              <span className="block text-[10px] text-slate-600">
+                                {session.messageCount} msgs
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Date */}
+                        <td className="px-4 py-2.5 text-[11px] text-slate-500 whitespace-nowrap">
+                          {formatDate(session.lastActivity)}
+                        </td>
+
+                        {/* Model */}
+                        <td className="px-4 py-2.5">
+                          <span className="rounded-md bg-slate-800/80 px-1.5 py-0.5 text-[10px] text-slate-400 whitespace-nowrap">
+                            {getModelBadge(session.models)}
+                          </span>
+                        </td>
+
+                        {/* Messages */}
+                        <td className="hidden px-4 py-2.5 text-[11px] text-slate-400 md:table-cell">
+                          {session.messageCount}
+                        </td>
+
+                        {/* Tokens */}
+                        <td className="px-4 py-2.5 text-[11px] font-medium text-slate-300">
+                          {formatTokens(session.totalTok)}
+                        </td>
+
+                        {/* Cache hit rate */}
+                        <td className="hidden px-4 py-2.5 md:table-cell">
+                          <div className="flex items-center gap-1.5">
+                            <div className="h-1 w-14 overflow-hidden rounded-full bg-slate-700/40">
+                              <div
+                                className="h-full rounded-full bg-cyan-600/70"
+                                style={{ width: `${session.cachePct}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] text-slate-500">
+                              {session.cachePct.toFixed(0)}%
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* API Cost */}
+                        <td className="px-4 py-2.5 text-[11px] font-medium text-amber-400/80 whitespace-nowrap">
+                          {formatCost(session.estimatedCost)}
+                        </td>
+
+                        {/* Your cost */}
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-baseline gap-2 whitespace-nowrap">
+                            <span className={`text-[11px] font-medium ${shareColor(session.subPct)}`}>
+                              {formatCost(session.yourCostForSession)}
+                            </span>
+                            <span
+                              className={`text-[10px] ${
+                                session.sessionValue >= 0 ? 'text-emerald-600' : 'text-red-600'
+                              }`}
+                            >
+                              {session.sessionValue >= 0
+                                ? `+${formatCost(session.sessionValue)}`
+                                : formatCost(session.sessionValue)}
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                </React.Fragment>
               );
             })}
           </tbody>
@@ -436,15 +658,15 @@ export function SessionsTable({ sessions, subscriptionCost, onSelectSession }: P
           </span>
         </div>
 
-        {mainSessions.length > 12 && (
+        {sortedGroups.length > 10 && (
           <button
-            onClick={() => setExpanded((e) => !e)}
+            onClick={() => setShowAllGroups((e) => !e)}
             className="flex items-center gap-1 text-xs text-slate-400 hover:text-white transition-colors"
           >
-            {expanded ? (
+            {showAllGroups ? (
               <><ChevronUp size={14} /> Show less</>
             ) : (
-              <><ChevronDown size={14} /> Show all {mainSessions.length} sessions</>
+              <><ChevronDown size={14} /> Show all {sortedGroups.length} projects</>
             )}
           </button>
         )}
