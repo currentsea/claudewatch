@@ -136,6 +136,27 @@ body:has(.light-mode) {
 .light-mode .text-yellow-400          { color: #a16207 !important; }
 .light-mode .text-green-400           { color: #15803d !important; }
 
+/* ── Accent text with opacity suffix (e.g. text-amber-300/80) ───────────────
+ * Tailwind compiles these to distinct class names (.text-amber-300\/80), so the
+ * solid-color overrides above don't catch them. Left alone, a faint pale accent
+ * lands on a pale tinted card — unreadable. Map each to its darkened accent;
+ * size/weight already separate these labels from the numbers beside them. */
+.light-mode .text-amber-100\/80,
+.light-mode .text-amber-300\/70,
+.light-mode .text-amber-300\/80,
+.light-mode .text-amber-400\/80       { color: #b45309 !important; }
+
+.light-mode .text-emerald-100\/70,
+.light-mode .text-emerald-300\/70,
+.light-mode .text-emerald-300\/80,
+.light-mode .text-emerald-300\/90,
+.light-mode .text-emerald-400\/70     { color: #047857 !important; }
+
+.light-mode .text-red-300\/70,
+.light-mode .text-red-300\/80         { color: #b91c1c !important; }
+
+.light-mode .text-blue-300\/80        { color: #1d4ed8 !important; }
+
 /* ── Tinted card backgrounds — slightly stronger so panels stay visible ─── */
 .light-mode .bg-amber-500\/5,
 .light-mode .bg-amber-500\/10         { background-color: #fef3c7 !important; }
